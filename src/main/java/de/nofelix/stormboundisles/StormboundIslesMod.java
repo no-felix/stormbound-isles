@@ -3,7 +3,6 @@ package de.nofelix.stormboundisles;
 import de.nofelix.stormboundisles.command.CommandManager;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
-import de.nofelix.stormboundisles.disaster.DisasterManager;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
 import de.nofelix.stormboundisles.handler.BuffAuraHandler;
@@ -44,7 +43,6 @@ public final class StormboundIslesMod implements ModInitializer {
 
 		BuffAuraHandler.register();
 		GameManager.register();
-		DisasterManager.register();
 		ScoreboardManager.register();
 		PlayerEventHandler.register();
 		LOGGER.info("Stormbound Isles Mod initialized!");
