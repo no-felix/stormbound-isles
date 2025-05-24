@@ -1,8 +1,6 @@
 package de.nofelix.stormboundisles;
 
 import de.nofelix.stormboundisles.command.CommandManager;
-import de.nofelix.stormboundisles.config.ConfigManager;
-import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
 import de.nofelix.stormboundisles.handler.BuffAuraHandler;
@@ -22,8 +20,6 @@ public final class StormboundIslesMod implements ModInitializer {
 
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	private CommandManager commandManager;
-
 	/**
 	 * Called by the Fabric loader on mod initialization.
 	 * Loads configuration and data, then registers commands and handlers.
@@ -36,13 +32,18 @@ public final class StormboundIslesMod implements ModInitializer {
 		InitializationRegistry.initializeAll(BASE_PACKAGE);
 
 		// Initialize and register commands using the command manager
-		commandManager = new CommandManager();
+		CommandManager commandManager = new CommandManager();
 		commandManager.register();
 
+		// Register remaining components
+		LOGGER.info("Registering BuffAuraHandler");
 		BuffAuraHandler.register();
+		LOGGER.info("Registering GameManager");
 		GameManager.register();
 		ScoreboardManager.register();
+		LOGGER.info("Registering PlayerEventHandler");
 		PlayerEventHandler.register();
+
 		LOGGER.info("Stormbound Isles Mod initialized!");
 	}
 }
