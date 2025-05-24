@@ -31,8 +31,6 @@ public final class StormboundIslesMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Stormbound Isles Mod initializing...");
-		ConfigManager.loadConfig();
-		DataManager.loadAll();
 
 		// Run all initialization methods discovered by the annotation scanner
 		InitializationRegistry.initializeAll(BASE_PACKAGE);
