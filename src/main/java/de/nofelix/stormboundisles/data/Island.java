@@ -1,207 +1,253 @@
 package de.nofelix.stormboundisles.data;
 
-import java.util.Objects;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Represents an island in the game world.
+ * Represents an island in the game world with its properties and state.
+ * 
+ * Islands are uniquely identified by their ID and can be assigned to teams,
+ * have custom spawn points, and belong to geographical zones.
+ * 
+ * Example usage:
+ * ```java
+ * Island island = new Island("island_01", IslandType.VOLCANO);
+ * island.setTeamName("red");
+ * island.setSpawnPoint(100, 64, 200);
+ * ```
  */
-public class Island {
-	/** The unique identifier for this island. */
-	private final String id;
-	/** The type of this island (e.g., STARTING, NORMAL, BOSS). */
-	private IslandType type;
-	/** The geographical zone this island belongs to. */
-	private Zone zone;
-	/**
-	 * The name of the team currently assigned to this island. Null if unassigned.
-	 */
-	private String teamName;
-	/** The X-coordinate of the custom spawn point for this island. */
-	private int spawnX = 0;
-	/**
-	 * The Y-coordinate of the custom spawn point for this island. A value less than
-	 * 0 indicates an undefined spawn point.
-	 */
-	private int spawnY = -1;
-	/** The Z-coordinate of the custom spawn point for this island. */
-	private int spawnZ = 0;
+public final class Island {
+    
+    // Constants for validation
+    private static final int UNDEFINED_SPAWN_Y = -1;
+    
+    // Core properties (immutable)
+    @NotNull
+    private final String id;
+    
+    // Mutable properties
+    @NotNull
+    private IslandType type;
+    @Nullable
+    private Zone zone;
+    @Nullable
+    private String teamName;
+    
+    // Spawn point coordinates
+    private int spawnX = 0;
+    private int spawnY = UNDEFINED_SPAWN_Y;
+    private int spawnZ = 0;
 
-	/**
-	 * Constructs a new Island with the given ID and type.
-	 *
-	 * @param id   The unique identifier for the island.
-	 * @param type The type of the island.
-	 * @throws IllegalArgumentException if id is null or empty, or if type is null
-	 */
-	public Island(String id, IslandType type) {
-		if (id == null || id.isEmpty()) {
-			throw new IllegalArgumentException("Island ID cannot be null or empty");
-		}
-		if (type == null) {
-			throw new IllegalArgumentException("Island type cannot be null");
-		}
-		this.id = id;
-		this.type = type;
-	}
+    /**
+     * Constructs a new Island with the given ID and type.
+     *
+     * @param id   The unique identifier for the island
+     * @param type The type of the island
+     * @throws IllegalArgumentException if id is null/empty or type is null
+     */
+    public Island(@NotNull String id, @NotNull IslandType type) {
+        validateId(id);
+        validateType(type);
+        
+        this.id = id;
+        this.type = type;
+    }
 
-	/**
-	 * Gets the island's unique identifier.
-	 *
-	 * @return The island ID
-	 */
-	public String getId() {
-		return id;
-	}
+    // Getters
+    
+    /**
+     * Gets the island's unique identifier.
+     *
+     * @return The island ID (never null or empty)
+     */
+    @NotNull
+    public String getId() {
+        return id;
+    }
 
-	/**
-	 * Gets the island's type.
-	 *
-	 * @return The island type
-	 */
-	public IslandType getType() {
-		return type;
-	}
+    /**
+     * Gets the island's type.
+     *
+     * @return The island type (never null)
+     */
+    @NotNull
+    public IslandType getType() {
+        return type;
+    }
 
-	/**
-	 * Sets the island's type.
-	 *
-	 * @param type The new island type
-	 * @throws IllegalArgumentException if type is null
-	 */
-	public void setType(IslandType type) {
-		if (type == null) {
-			throw new IllegalArgumentException("Island type cannot be null");
-		}
-		this.type = type;
-	}
+    /**
+     * Gets the island's geographical zone.
+     *
+     * @return The island's zone, or null if not assigned
+     */
+    @Nullable
+    public Zone getZone() {
+        return zone;
+    }
 
-	/**
-	 * Gets the island's geographical zone.
-	 *
-	 * @return The island's zone, may be null if not defined
-	 */
-	public Zone getZone() {
-		return zone;
-	}
+    /**
+     * Gets the name of the team assigned to this island.
+     *
+     * @return The team name, or null if no team is assigned
+     */
+    @Nullable
+    public String getTeamName() {
+        return teamName;
+    }
 
-	/**
-	 * Sets the island's geographical zone.
-	 *
-	 * @param zone The new geographical zone for this island
-	 */
-	public void setZone(Zone zone) {
-		this.zone = zone;
-	}
+    /**
+     * Gets the X-coordinate of the custom spawn point.
+     *
+     * @return The spawn X-coordinate
+     */
+    public int getSpawnX() {
+        return spawnX;
+    }
 
-	/**
-	 * Gets the name of the team assigned to this island.
-	 *
-	 * @return The team name, or null if no team is assigned
-	 */
-	public String getTeamName() {
-		return teamName;
-	}
+    /**
+     * Gets the Y-coordinate of the custom spawn point.
+     * A value of -1 indicates an undefined spawn point.
+     *
+     * @return The spawn Y-coordinate, or -1 if undefined
+     */
+    public int getSpawnY() {
+        return spawnY;
+    }
 
-	/**
-	 * Assigns a team to this island.
-	 *
-	 * @param teamName The name of the team to assign, or null to clear assignment
-	 */
-	public void setTeamName(String teamName) {
-		this.teamName = teamName;
-	}
+    /**
+     * Gets the Z-coordinate of the custom spawn point.
+     *
+     * @return The spawn Z-coordinate
+     */
+    public int getSpawnZ() {
+        return spawnZ;
+    }
 
-	/**
-	 * Gets the X-coordinate of the custom spawn point.
-	 *
-	 * @return The spawn X-coordinate
-	 */
-	public int getSpawnX() {
-		return spawnX;
-	}
+    // Setters with validation
+    
+    /**
+     * Sets the island's type.
+     *
+     * @param type The new island type
+     * @throws IllegalArgumentException if type is null
+     */
+    public void setType(@NotNull IslandType type) {
+        validateType(type);
+        this.type = type;
+    }
 
-	/**
-	 * Gets the Y-coordinate of the custom spawn point.
-	 * A value less than 0 indicates an undefined spawn point.
-	 *
-	 * @return The spawn Y-coordinate
-	 */
-	public int getSpawnY() {
-		return spawnY;
-	}
+    /**
+     * Sets the island's geographical zone.
+     *
+     * @param zone The new geographical zone, or null to clear
+     */
+    public void setZone(@Nullable Zone zone) {
+        this.zone = zone;
+    }
 
-	/**
-	 * Gets the Z-coordinate of the custom spawn point.
-	 *
-	 * @return The spawn Z-coordinate
-	 */
-	public int getSpawnZ() {
-		return spawnZ;
-	}
+    /**
+     * Assigns a team to this island.
+     *
+     * @param teamName The name of the team to assign, or null to clear assignment
+     */
+    public void setTeamName(@Nullable String teamName) {
+        this.teamName = (teamName != null && teamName.trim().isEmpty()) ? null : teamName;
+    }
 
-	/**
-	 * Sets the custom spawn point coordinates for this island.
-	 *
-	 * @param x The X-coordinate
-	 * @param y The Y-coordinate
-	 * @param z The Z-coordinate
-	 */
-	public void setSpawnPoint(int x, int y, int z) {
-		this.spawnX = x;
-		this.spawnY = y;
-		this.spawnZ = z;
-	}
+    /**
+     * Sets the custom spawn point coordinates for this island.
+     *
+     * @param x The X-coordinate
+     * @param y The Y-coordinate (use -1 to mark as undefined)
+     * @param z The Z-coordinate
+     */
+    public void setSpawnPoint(int x, int y, int z) {
+        this.spawnX = x;
+        this.spawnY = y;
+        this.spawnZ = z;
+    }
 
-	/**
-	 * Checks if this island has a defined spawn point.
-	 *
-	 * @return true if a spawn point is defined (Y >= 0), false otherwise
-	 */
-	public boolean hasSpawnPoint() {
-		return spawnY >= 0;
-	}
+    /**
+     * Clears the custom spawn point, marking it as undefined.
+     */
+    public void clearSpawnPoint() {
+        this.spawnX = 0;
+        this.spawnY = UNDEFINED_SPAWN_Y;
+        this.spawnZ = 0;
+    }
 
-	/**
-	 * Checks if this island has a defined zone.
-	 *
-	 * @return true if a zone is defined, false otherwise
-	 */
-	public boolean hasZone() {
-		return zone != null;
-	}
+    // State check methods
+    
+    /**
+     * Checks if this island has a defined spawn point.
+     *
+     * @return true if a spawn point is defined (Y >= 0), false otherwise
+     */
+    public boolean hasSpawnPoint() {
+        return spawnY >= 0;
+    }
 
-	/**
-	 * Checks if this island has a team assigned to it.
-	 *
-	 * @return true if a team is assigned, false otherwise
-	 */
-	public boolean hasTeam() {
-		return teamName != null && !teamName.isEmpty();
-	}
+    /**
+     * Checks if this island has a defined zone.
+     *
+     * @return true if a zone is assigned, false otherwise
+     */
+    public boolean hasZone() {
+        return zone != null;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o)
-			return true;
-		if (o == null || getClass() != o.getClass())
-			return false;
-		Island island = (Island) o;
-		return Objects.equals(id, island.id);
-	}
+    /**
+     * Checks if this island has a team assigned to it.
+     *
+     * @return true if a team is assigned, false otherwise
+     */
+    public boolean hasTeam() {
+        return teamName != null && !teamName.trim().isEmpty();
+    }
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(id);
-	}
+    /**
+     * Checks if this island is unassigned (no team).
+     *
+     * @return true if no team is assigned, false otherwise
+     */
+    public boolean isUnassigned() {
+        return !hasTeam();
+    }
 
-	@Override
-	public String toString() {
-		return "Island{" +
-				"id='" + id + '\'' +
-				", type=" + type +
-				", hasZone=" + (zone != null) +
-				", team='" + teamName + '\'' +
-				", hasSpawn=" + (spawnY >= 0) +
-				'}';
-	}
+    // Private validation methods
+    
+    private static void validateId(@Nullable String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("Island ID cannot be null or empty");
+        }
+    }
+
+    private static void validateType(@Nullable IslandType type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Island type cannot be null");
+        }
+    }
+
+    // Object methods
+    
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof Island other && id.equals(other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Island{id='%s', type=%s, zone=%s, team='%s', spawnPoint=%s}".formatted(
+                id,
+                type,
+                zone != null ? zone : "none",
+                teamName != null ? teamName : "unassigned",
+                hasSpawnPoint() ? "(%d,%d,%d)".formatted(spawnX, spawnY, spawnZ) : "undefined"
+        );
+    }
 }
