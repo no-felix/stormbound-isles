@@ -1,68 +1,118 @@
 # Stormbound Isles
 
-**Stormbound Isles** ist ein Minecraft-Projekt auf Basis von Fabric für Version 1.21.1.  
-Fünf Teams treten auf fünf einzigartigen, elementar inspirierten Inseln gegeneinander an, bauen, kämpfen und überleben – während zufällige Katastrophen das Spielgeschehen beeinflussen.
-
-Ziel ist es, die eigene Insel zu gestalten, als Team zu überleben und am Ende sowohl durch Kreativität als auch durch strategischen Kampf zu punkten.
-
-## Features
-
-- 5 Elementar-Inseln: Vulkan, Eis/Schnee, Wüste, Pilz, Kristall/Magie
-- Katastrophen, die zufällig oder durch Events ausgelöst werden und das Gameplay beeinflussen
-- Team-Passivboni abhängig von Insel und Position
-- Bewertungsphase: Punkte für Bauwerke, Überleben und Kreativität – inkl. Jury-System
-- PvP-Phase nach Ablauf der „Schutzwoche" – dann sind Überfälle und Kämpfe möglich
-- Modpack basierend auf Fabric (u.a. Simple Voice Chat, Sodium, Create, Iris, ...)
-
-## Befehle
-
-Stormbound Isles bietet verschiedene Befehle, die über `/sbi` aufgerufen werden können:
-
-### Admin-Befehle (Berechtigungsstufe 3)
-- `/sbi admin game start` - Startet das Spiel
-- `/sbi admin game stop` - Stoppt das Spiel
-- `/sbi admin game phase <Phase>` - Setzt die aktuelle Spielphase
-- `/sbi admin reset` - Setzt alle Spieldaten zurück (mit Bestätigung)
-
-### Insel-Befehle (Berechtigungsstufe 2)
-- `/sbi island list` - Zeigt alle Inseln an
-- `/sbi island setspawn <InselID>` - Setzt den Spawn-Punkt einer Insel
-- `/sbi island disaster trigger <InselID> <Typ>` - Löst eine Katastrophe aus
-- `/sbi island zone ...` - Verwaltet Inselzonen (Polygon, Rechteck)
-
-### Team-Befehle
-- `/sbi team assign <TeamName> <Spieler>` - Weist einen Spieler einem Team zu (Level 2)
-- `/sbi team remove <Spieler>` - Entfernt einen Spieler aus seinem Team (Level 2)
-- `/sbi team info <TeamName>` - Zeigt Informationen über ein Team (Level 0)
-
-### Punkte-Befehle (Berechtigungsstufe 2)
-- `/sbi points add <Team> <Anzahl> [Grund]` - Fügt einem Team Punkte hinzu
-- `/sbi points remove <Team> <Anzahl> [Grund]` - Entfernt Punkte von einem Team
-
-### Spieler-Befehle (Berechtigungsstufe 0)
-- `/sbi player info [Spieler]` - Zeigt Informationen über einen Spieler
-
-## Entwicklung
-
-Das Plugin verwendet eine modulare Befehlsstruktur, die in verschiedene Kategorien aufgeteilt ist. Jede Befehlskategorie ist in einer eigenen Klasse implementiert, was die Wartung und Erweiterung erleichtert.
-
-### Architektur
-
-- **Modulares Befehlssystem**: Basierend auf dem Interface `CommandCategory`
-- **Automatisches Initialisierungssystem**: Komponenten werden über die `@Initialize`-Annotation gefunden und initialisiert
-- **Zentralisierte Fehlermeldungen**: Alle Fehlermeldungen werden in `Constants.java` definiert
-- **Hierarchische Paketstruktur**: Klare Trennung von Zuständigkeiten nach Funktionalität
-
-### Berechtigungsstufen
-- Level 0: Reguläre Spieler
-- Level 2: Moderatoren
-- Level 3: Administratoren
-
-### Entwickler-Ressourcen
-- [Style Guide](STYLE_GUIDE.md): Detaillierte Coding-Standards und Best Practices für Beiträge
-- Javadoc-Dokumentation für alle öffentlichen Klassen und Methoden
-- Prioritätsbasiertes Initialisierungssystem für eine klare Abhängigkeitsreihenfolge
+<div align="center">
+  <img src="src/main/resources/assets/stormbound-isles/icon.png" alt="Stormbound Isles" width="128" height="128">
   
-<p align="right">
-  <img src="src/main/resources/assets/stormbound-isles/icon.png" alt="Stormbound Isles Icon" width="48" />
-</p>
+  **A competitive multiplayer Minecraft mod featuring elemental islands, strategic gameplay, and dynamic disasters**
+  
+  [![Fabric](https://img.shields.io/badge/Fabric-1.21.1-green.svg)](https://fabricmc.net/)
+  [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
+  [![License](https://img.shields.io/github/license/no-felix/stormbound-isles)](LICENSE)
+  
+  [🌐 Project Website](https://no-felix.github.io/stormbound-isles-nextjs/) • [📖 Documentation](https://github.com/no-felix/stormbound-isles-nextjs)
+</div>
+
+## 🎮 Overview
+
+Stormbound Isles is a sophisticated Minecraft mod built with Fabric that transforms multiplayer gameplay into an elemental battleground. Five teams compete across unique themed islands while facing dynamic disasters and strategic challenges in multiple game phases.
+
+### 🌟 Key Features
+
+- **🏝️ Five Elemental Islands**: Volcano, Ice, Desert, Mushroom, and Crystal biomes with unique mechanics
+- **⚡ Dynamic Disaster System**: Random or triggered catastrophes that reshape gameplay
+- **🛡️ Team Passive Buffs**: Location and island-based bonuses using custom [`BuffAuraHandler`](src/main/java/de/nofelix/stormboundisles/handler/BuffAuraHandler.java)
+- **📊 Multi-Phase Gameplay**: Build phase protection → PvP phase → Scoring evaluation
+- **🏆 Comprehensive Scoring**: Creative building, survival, and combat performance tracking
+- **⚔️ Strategic PvP**: Coordinated team battles after the protection period
+
+## 🏗️ Technical Architecture
+
+### Core Systems
+
+- **[`GameManager`](src/main/java/de/nofelix/stormboundisles/game/GameManager.java)**: Phase management, timers, and game state coordination
+- **[`ScoreboardManager`](src/main/java/de/nofelix/stormboundisles/game/ScoreboardManager.java)**: Real-time team scoring and Minecraft scoreboard integration
+- **[`InitializationRegistry`](src/main/java/de/nofelix/stormboundisles/init/InitializationRegistry.java)**: Priority-based component initialization system
+- **[`CommandManager`](src/main/java/de/nofelix/stormboundisles/command/CommandManager.java)**: Modular command architecture with permission levels
+
+### Design Patterns
+
+```java
+@Initialize(priority = 2000)
+public static void initialize() {
+    // Priority-based initialization system
+    // 2000-3000: Core systems
+    // 1500-1999: Managers and services  
+    // 1000-1499: Game elements
+    // 500-999: Feature implementations
+}
+```
+
+- **Modular Command System**: Interface-based [`CommandCategory`](src/main/java/de/nofelix/stormboundisles/command/CommandCategory.java) for organized command management
+- **Event-Driven Architecture**: Fabric event handlers for seamless Minecraft integration
+- **Data Abstraction**: Centralized [`DataManager`](src/main/java/de/nofelix/stormboundisles/data/DataManager.java) for team and island management
+- **Configuration Management**: Flexible settings through [`ConfigManager`](src/main/java/de/nofelix/stormboundisles/config/ConfigManager.java)
+
+## 📋 Command System
+
+The mod features a hierarchical permission system with three levels:
+
+| Permission Level | Role | Commands |
+|-----------------|------|----------|
+| **Level 0** | Players | Team info, player info |
+| **Level 2** | Moderators | Island management, team assignments, points |
+| **Level 3** | Administrators | Game control, reset functions |
+
+### Example Commands
+```
+/sbi admin game start              # Start the game
+/sbi team assign volcano player1   # Assign player to team
+/sbi island setspawn island_01     # Set island spawn point
+/sbi points add volcano 100 "Building bonus"
+```
+
+## 🎯 Game Flow
+
+1. **Lobby Phase**: Team assignment and preparation
+2. **Build Phase**: Protected construction period with team buffs
+3. **PvP Phase**: Strategic combat and resource competition  
+4. **Evaluation**: Scoring based on creativity, survival, and performance
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Minecraft 1.21.1
+- Fabric Loader
+- Java 21+
+
+### Installation
+1. Download the latest release
+2. Place in your Fabric mods folder
+3. Configure teams and islands via commands
+4. Start your elemental competition!
+
+## 🌐 Project Links
+
+- **[🎮 Official Website](https://no-felix.github.io/stormbound-isles-nextjs/)** - Complete project showcase
+- **[📱 Next.js Frontend](https://github.com/no-felix/stormbound-isles-nextjs)** - Modern web interface
+
+## 🤝 Contributing
+
+We welcome contributions! Please check our coding standards and architectural patterns before submitting PRs.
+
+### Development Setup
+```bash
+git clone https://github.com/no-felix/stormbound-isles
+./gradlew build
+./gradlew runClient  # For testing
+./gradlew runServer  # For server testing
+```
+
+## 📄 License
+
+This project is licensed under the CC0-1.0 License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ using Fabric for Minecraft 1.21.1</sub>
+</div>
