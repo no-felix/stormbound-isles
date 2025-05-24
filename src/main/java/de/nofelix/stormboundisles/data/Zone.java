@@ -1,235 +1,346 @@
 package de.nofelix.stormboundisles.data;
 
 import net.minecraft.util.math.BlockPos;
-import java.util.ArrayList;
-import java.util.Collections;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Represents a zone in the game world defined by a polygon of points.
- * Zones can be rectangular or arbitrarily-shaped polygons.
- * Allows horizontal containment via ray-casting and vertical range based on
- * point Y values.
+ * Represents a territorial zone in the game world defined by a 2D polygon.
+ * 
+ * Zones represent island territories and extend infinitely in the Y direction
+ * (from bedrock to sky limit). They provide efficient horizontal containment
+ * checking using ray-casting algorithms for arbitrarily-shaped polygons.
+ * 
+ * Example usage:
+ * ```java
+ * // Create a rectangular island territory
+ * Zone territory = Zone.createRectangle(
+ *     new BlockPos(0, 64, 0), 
+ *     new BlockPos(100, 64, 100)
+ * );
+ * 
+ * // Create a custom polygon territory
+ * List<BlockPos> vertices = List.of(
+ *     new BlockPos(0, 64, 0),
+ *     new BlockPos(50, 64, 25),
+ *     new BlockPos(25, 64, 75)
+ * );
+ * Zone territory = new Zone(vertices);
+ * 
+ * // Check if player is in territory (Y-coordinate ignored)
+ * boolean inTerritory = zone.contains(playerPos);
+ * ```
  */
-public class Zone {
-    /**
-     * The list of vertices defining the polygon in the horizontal plane (X and Z
-     * coordinates).
-     */
-    private final List<BlockPos> points;
-    /**
-     * The minimum Y-coordinate among all vertices, defining the bottom of the zone.
-     */
-    private final int minY;
-    /**
-     * The maximum Y-coordinate among all vertices, defining the top of the zone.
-     */
-    private final int maxY;
-    /**
-     * Tolerance threshold for edge detection, determines how close a point must be
-     * to be considered on an edge
-     */
+public final class Zone {
+    
+    // Constants
     private static final double EDGE_TOLERANCE = 0.01;
-    /** Offset to the center of a block from its corner coordinates */
     private static final double BLOCK_CENTER_OFFSET = 0.5;
+    private static final int MIN_POLYGON_VERTICES = 3;
+    private static final int RECTANGLE_VERTICES = 4;
+    
+    // Core properties (immutable)
+    @NotNull
+    private final List<BlockPos> points;
 
     /**
      * Constructs a new Zone from a list of vertices.
-     * Calculates the minimum and maximum Y coordinates based on the provided
-     * points.
+     * 
+     * The zone represents a 2D territorial boundary that extends infinitely
+     * in the Y direction. Only X and Z coordinates are used for containment
+     * checking - Y coordinates in the vertices are ignored.
      *
-     * @param points The list of BlockPos points defining the zone's polygon
-     *               vertices
-     * @throws IllegalArgumentException If points is null or contains fewer than 3
-     *                                  vertices
+     * @param points The list of BlockPos points defining the zone's polygon vertices
+     * @throws IllegalArgumentException if points is null, empty, or contains fewer than 3 vertices
      */
-    public Zone(List<BlockPos> points) {
-        if (points == null || points.size() < 3) {
-            throw new IllegalArgumentException("A polygon zone requires at least 3 points");
-        }
-        this.points = new ArrayList<>(points); // Defensive copy
-
-        // Calculate Y bounds
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
-        for (BlockPos pos : points) {
-            min = Math.min(min, pos.getY());
-            max = Math.max(max, pos.getY());
-        }
-        this.minY = min;
-        this.maxY = max;
+    public Zone(@NotNull List<BlockPos> points) {
+        validatePolygonPoints(points);
+        this.points = List.copyOf(points); // Immutable defensive copy
     }
 
+    // Static factory methods
+    
     /**
      * Creates a rectangular zone from two corner points.
-     * Computes the minimum and maximum X and Z coordinates to create a properly
-     * oriented rectangle
-     * regardless of which corners are provided.
+     * 
+     * The method automatically determines the proper orientation regardless
+     * of which corners are provided, creating a properly aligned rectangle.
+     * The Y coordinates are ignored for territory purposes.
      *
      * @param corner1 The first corner position
      * @param corner2 The second corner position
-     * @return A new Zone representing the rectangle
+     * @return A new Zone representing the rectangle territory
+     * @throws IllegalArgumentException if either corner is null
      */
-    public static Zone createRectangle(BlockPos corner1, BlockPos corner2) {
-        if (corner1 == null || corner2 == null) {
-            throw new IllegalArgumentException("Corner positions cannot be null");
-        }
+    @NotNull
+    public static Zone createRectangle(@NotNull BlockPos corner1, @NotNull BlockPos corner2) {
+        validateCorners(corner1, corner2);
 
-        // Compute min and max coordinates
+        // Calculate bounds (Y coordinate doesn't matter for territories)
         int minX = Math.min(corner1.getX(), corner2.getX());
         int maxX = Math.max(corner1.getX(), corner2.getX());
         int minZ = Math.min(corner1.getZ(), corner2.getZ());
         int maxZ = Math.max(corner1.getZ(), corner2.getZ());
-        int y = corner1.getY(); // Use the Y value from the first corner for all points
+        int y = 64; // Arbitrary Y coordinate since it's ignored
 
-        // Create corner points in clockwise order
-        List<BlockPos> rectanglePoints = new ArrayList<>(4);
-        rectanglePoints.add(new BlockPos(minX, y, minZ)); // Top-left
-        rectanglePoints.add(new BlockPos(maxX, y, minZ)); // Top-right
-        rectanglePoints.add(new BlockPos(maxX, y, maxZ)); // Bottom-right
-        rectanglePoints.add(new BlockPos(minX, y, maxZ)); // Bottom-left
+        // Create vertices in clockwise order for consistency
+        List<BlockPos> rectanglePoints = List.of(
+            new BlockPos(minX, y, minZ), // Top-left
+            new BlockPos(maxX, y, minZ), // Top-right
+            new BlockPos(maxX, y, maxZ), // Bottom-right
+            new BlockPos(minX, y, maxZ)  // Bottom-left
+        );
 
         return new Zone(rectanglePoints);
     }
 
+    // Getters
+    
     /**
-     * Gets the list of vertices defining this polygon.
+     * Gets an unmodifiable list of vertices defining this polygon.
+     * Note: Y coordinates in vertices are not used for containment checking.
      *
-     * @return An unmodifiable list of BlockPos vertices.
+     * @return The polygon vertices (never null or empty)
      */
+    @NotNull
     public List<BlockPos> getPoints() {
-        return Collections.unmodifiableList(points);
+        return points; // Already immutable from constructor
     }
 
     /**
-     * Gets the minimum Y-coordinate of this zone.
+     * Gets the number of vertices in this zone's polygon.
      *
-     * @return The minimum Y-coordinate.
+     * @return The vertex count
      */
-    public int getMinY() {
-        return minY;
+    public int getVertexCount() {
+        return points.size();
     }
 
+    // Territory containment checking methods
+    
     /**
-     * Gets the maximum Y-coordinate of this zone.
-     *
-     * @return The maximum Y-coordinate.
-     */
-    public int getMaxY() {
-        return maxY;
-    }
-
-    /**
-     * Gets the X coordinate of the center of a block.
+     * Checks if the given position is contained within this territorial zone.
      * 
-     * @param pos The BlockPos
-     * @return The X coordinate of the block center
-     */
-    private double centerX(BlockPos pos) {
-        return pos.getX() + BLOCK_CENTER_OFFSET;
-    }
-
-    /**
-     * Gets the Z coordinate of the center of a block.
-     * 
-     * @param pos The BlockPos
-     * @return The Z coordinate of the block center
-     */
-    private double centerZ(BlockPos pos) {
-        return pos.getZ() + BLOCK_CENTER_OFFSET;
-    }
-
-    /**
-     * Checks if a point lies exactly on any edge of the polygon.
-     * This helps with edge case detection for more consistent behavior.
+     * This method only checks horizontal containment (X and Z coordinates).
+     * The Y coordinate is completely ignored, meaning the zone extends
+     * infinitely upward and downward, representing island territory boundaries.
      *
-     * @param pos The position to check.
-     * @return True if the position lies on any edge of the polygon, false
-     *         otherwise.
+     * @param pos The position to check
+     * @return true if the position is inside the territory, false otherwise
+     * @throws IllegalArgumentException if pos is null
      */
-    private boolean isOnPolygonEdge(BlockPos pos) {
-        double x = centerX(pos);
-        double z = centerZ(pos);
-        int n = points.size();
-
-        for (int i = 0, j = n - 1; i < n; j = i++) {
-            double xi = centerX(points.get(i));
-            double zi = centerZ(points.get(i));
-            double xj = centerX(points.get(j));
-            double zj = centerZ(points.get(j));
-
-            // Check if point lies on line segment using distance calculation
-            if (distanceToLineSegmentSquared(x, z, xi, zi, xj, zj) < EDGE_TOLERANCE) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Calculates the squared distance from a point to a line segment.
-     * Used for edge detection in the polygon.
-     *
-     * @param x  Point x coordinate
-     * @param z  Point z coordinate
-     * @param x1 Line segment start x
-     * @param z1 Line segment start z
-     * @param x2 Line segment end x
-     * @param z2 Line segment end z
-     * @return Squared distance from point to line segment
-     */
-    private double distanceToLineSegmentSquared(double x, double z, double x1, double z1, double x2, double z2) {
-        double lineLength = (x2 - x1) * (x2 - x1) + (z2 - z1) * (z2 - z1);
-        if (lineLength == 0.0)
-            return (x - x1) * (x - x1) + (z - z1) * (z - z1);
-
-        // Calculate projection
-        double t = ((x - x1) * (x2 - x1) + (z - z1) * (z2 - z1)) / lineLength;
-        t = Math.max(0, Math.min(1, t));
-
-        double projectionX = x1 + t * (x2 - x1);
-        double projectionZ = z1 + t * (z2 - z1);
-
-        return (x - projectionX) * (x - projectionX) + (z - projectionZ) * (z - projectionZ);
-    }
-
-    /**
-     * Checks if the given position is contained within the horizontal boundaries (X
-     * and Z) of this polygon
-     * using an enhanced ray casting algorithm with improved edge case handling.
-     * This method ignores the Y-coordinate, effectively treating the zone as
-     * infinitely tall.
-     *
-     * @param pos The position to check.
-     * @return True if the position is inside the zone, false otherwise.
-     */
-    public boolean contains(BlockPos pos) {
-        // Edge case: Check if the point is on the polygon boundary
+    public boolean contains(@NotNull BlockPos pos) {
+        validatePosition(pos);
+        
+        // Check if point is exactly on polygon edge
         if (isOnPolygonEdge(pos)) {
             return true;
         }
 
-        // Standard ray casting algorithm
-        boolean inside = false;
-        double x = centerX(pos);
-        double z = centerZ(pos);
+        return performRayCasting(pos);
+    }
+
+    // State check methods
+    
+    /**
+     * Checks if this zone represents a rectangle.
+     *
+     * @return true if the zone has exactly 4 vertices, false otherwise
+     */
+    public boolean isRectangle() {
+        return points.size() == RECTANGLE_VERTICES;
+    }
+
+    // Private helper methods
+    
+    /**
+     * Validates that polygon points meet the minimum requirements.
+     */
+    private static void validatePolygonPoints(@Nullable List<BlockPos> points) {
+        if (points == null) {
+            throw new IllegalArgumentException("Points list cannot be null");
+        }
+        if (points.size() < MIN_POLYGON_VERTICES) {
+            throw new IllegalArgumentException(
+                "A polygon zone requires at least %d points, got %d".formatted(MIN_POLYGON_VERTICES, points.size())
+            );
+        }
+        if (points.contains(null)) {
+            throw new IllegalArgumentException("Points list cannot contain null positions");
+        }
+    }
+
+    /**
+     * Validates corner positions for rectangle creation.
+     */
+    private static void validateCorners(@Nullable BlockPos corner1, @Nullable BlockPos corner2) {
+        if (corner1 == null || corner2 == null) {
+            throw new IllegalArgumentException("Corner positions cannot be null");
+        }
+    }
+
+    /**
+     * Validates a position parameter.
+     */
+    private static void validatePosition(@Nullable BlockPos pos) {
+        if (pos == null) {
+            throw new IllegalArgumentException("Position cannot be null");
+        }
+    }
+
+    /**
+     * Gets the X coordinate of a block's center.
+     */
+    private static double getCenterX(@NotNull BlockPos pos) {
+        return pos.getX() + BLOCK_CENTER_OFFSET;
+    }
+
+    /**
+     * Gets the Z coordinate of a block's center.
+     */
+    private static double getCenterZ(@NotNull BlockPos pos) {
+        return pos.getZ() + BLOCK_CENTER_OFFSET;
+    }
+
+    /**
+     * Checks if a position lies exactly on any edge of the polygon.
+     * Only uses X and Z coordinates - Y is ignored.
+     */
+    private boolean isOnPolygonEdge(@NotNull BlockPos pos) {
+        double x = getCenterX(pos);
+        double z = getCenterZ(pos);
         int n = points.size();
 
-        for (int i = 0, j = n - 1; i < n; j = i++) {
-            double xi = centerX(points.get(i));
-            double zi = centerZ(points.get(i));
-            double xj = centerX(points.get(j));
-            double zj = centerZ(points.get(j));
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n; // Next vertex (wrapping to 0 for last vertex)
+            
+            if (isPointOnLineSegment(x, z, points.get(i), points.get(j))) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Checks if a point lies on a line segment between two vertices.
+     * Only uses X and Z coordinates - Y is ignored.
+     */
+    private boolean isPointOnLineSegment(double x, double z, @NotNull BlockPos vertex1, @NotNull BlockPos vertex2) {
+        double x1 = getCenterX(vertex1);
+        double z1 = getCenterZ(vertex1);
+        double x2 = getCenterX(vertex2);
+        double z2 = getCenterZ(vertex2);
+        
+        return calculateDistanceToLineSegmentSquared(x, z, x1, z1, x2, z2) < EDGE_TOLERANCE;
+    }
+
+    /**
+     * Calculates the squared distance from a point to a line segment.
+     * Uses only X and Z coordinates.
+     */
+    private static double calculateDistanceToLineSegmentSquared(
+            double pointX, double pointZ, 
+            double lineX1, double lineZ1, 
+            double lineX2, double lineZ2) {
+        
+        double lineLength = (lineX2 - lineX1) * (lineX2 - lineX1) + (lineZ2 - lineZ1) * (lineZ2 - lineZ1);
+        
+        if (lineLength == 0.0) {
+            // Line segment is actually a point
+            return (pointX - lineX1) * (pointX - lineX1) + (pointZ - lineZ1) * (pointZ - lineZ1);
+        }
+
+        // Calculate projection parameter
+        double t = ((pointX - lineX1) * (lineX2 - lineX1) + (pointZ - lineZ1) * (lineZ2 - lineZ1)) / lineLength;
+        t = Math.clamp(t, 0.0, 1.0); // Clamp to line segment
+
+        // Calculate projection point
+        double projectionX = lineX1 + t * (lineX2 - lineX1);
+        double projectionZ = lineZ1 + t * (lineZ2 - lineZ1);
+
+        // Return squared distance to projection
+        return (pointX - projectionX) * (pointX - projectionX) + (pointZ - projectionZ) * (pointZ - projectionZ);
+    }
+
+    /**
+     * Performs ray-casting algorithm to determine if a point is inside the polygon.
+     * Only uses X and Z coordinates - Y is ignored.
+     */
+    private boolean performRayCasting(@NotNull BlockPos pos) {
+        boolean inside = false;
+        double x = getCenterX(pos);
+        double z = getCenterZ(pos);
+        int n = points.size();
+
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n; // Next vertex (wrapping)
+            
+            double xi = getCenterX(points.get(i));
+            double zi = getCenterZ(points.get(i));
+            double xj = getCenterX(points.get(j));
+            double zj = getCenterZ(points.get(j));
 
             // Check if ray intersects with polygon edge
-            boolean intersects = ((zi > z) != (zj > z)) &&
-                    (x < (xj - xi) * (z - zi) / (zj - zi) + xi);
-
-            if (intersects) {
+            if (((zi > z) != (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) {
                 inside = !inside;
             }
         }
 
         return inside;
+    }
+
+    // Object methods
+    
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof Zone other && Objects.equals(points, other.points);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(points);
+    }
+
+    @Override
+    public String toString() {
+        return "Zone{vertices=%d, bounds=(%d,%d) to (%d,%d)}".formatted(
+                points.size(),
+                getMinX(), getMinZ(),
+                getMaxX(), getMaxZ()
+        );
+    }
+
+    // Additional utility methods for 2D bounds
+    
+    /**
+     * Gets the minimum X coordinate among all vertices.
+     */
+    private int getMinX() {
+        return points.stream().mapToInt(BlockPos::getX).min().orElse(0);
+    }
+
+    /**
+     * Gets the maximum X coordinate among all vertices.
+     */
+    private int getMaxX() {
+        return points.stream().mapToInt(BlockPos::getX).max().orElse(0);
+    }
+
+    /**
+     * Gets the minimum Z coordinate among all vertices.
+     */
+    private int getMinZ() {
+        return points.stream().mapToInt(BlockPos::getZ).min().orElse(0);
+    }
+
+    /**
+     * Gets the maximum Z coordinate among all vertices.
+     */
+    private int getMaxZ() {
+        return points.stream().mapToInt(BlockPos::getZ).max().orElse(0);
     }
 }
