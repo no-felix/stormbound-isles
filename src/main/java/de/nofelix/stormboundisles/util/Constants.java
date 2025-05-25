@@ -7,6 +7,11 @@ import net.minecraft.util.Formatting;
  * Contains constant values used throughout the mod.
  */
 public class Constants {
+	// Prevent instantiation
+	private Constants() {
+		throw new UnsupportedOperationException("Utility class");
+	}
+
 	/** Prefix used for mod-related messages. */
 	public static final Text PREFIX = Text.literal("[Stormbound Isles] ").formatted(Formatting.BLUE);
 	/**
@@ -44,6 +49,12 @@ public class Constants {
 	public static final String NO_ISLAND = "§7None";
 	/** Reset formatting code */
 	public static final String RESET = "§r";
+
+	// Scoreboard Constants
+	/** Name of the main scoreboard objective for team points */
+	public static final String SCOREBOARD_OBJECTIVE_NAME = "sbi_points";
+	/** Display title for the scoreboard */
+	public static final String SCOREBOARD_TITLE = "§b§lStormbound Isles";
 
 	// Command Constants
 	/**

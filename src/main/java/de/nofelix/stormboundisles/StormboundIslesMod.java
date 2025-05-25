@@ -2,7 +2,6 @@ package de.nofelix.stormboundisles;
 
 import de.nofelix.stormboundisles.command.CommandManager;
 import de.nofelix.stormboundisles.game.GameManager;
-import de.nofelix.stormboundisles.game.ScoreboardManager;
 import de.nofelix.stormboundisles.handler.BuffAuraHandler;
 import de.nofelix.stormboundisles.handler.PlayerEventHandler;
 import de.nofelix.stormboundisles.init.InitializationRegistry;
@@ -32,6 +31,7 @@ public final class StormboundIslesMod implements ModInitializer {
 		InitializationRegistry.initializeAll(BASE_PACKAGE);
 
 		// Initialize and register commands using the command manager
+		// TODO: migrate to new initialization system from above
 		CommandManager commandManager = new CommandManager();
 		commandManager.register();
 
@@ -40,7 +40,6 @@ public final class StormboundIslesMod implements ModInitializer {
 		BuffAuraHandler.register();
 		LOGGER.info("Registering GameManager");
 		GameManager.register();
-		ScoreboardManager.register();
 		LOGGER.info("Registering PlayerEventHandler");
 		PlayerEventHandler.register();
 

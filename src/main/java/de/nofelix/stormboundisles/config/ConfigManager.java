@@ -30,11 +30,11 @@ import java.io.IOException;
  * ```
  */
 public final class ConfigManager {
-    
+
     private static final String CONFIG_FILENAME = "stormbound-isles-config.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Logger LOGGER = StormboundIslesMod.LOGGER;
-    
+
     // Default values as constants
     private static final class Defaults {
         static final int BUILD_PHASE_TICKS = 20 * 60 * 60 * 24 * 7; // 1 week
@@ -46,13 +46,14 @@ public final class ConfigManager {
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
         static final int BUFF_UPDATE_INTERVAL = 60;
         static final int BUFF_DURATION_TICKS = 80;
+        static final int SCOREBOARD_UPDATE_INTERVAL = 20; // 1 second
         static final int DISASTER_INTERVAL_TICKS = 20 * 60 * 5; // 5 minutes
         static final int DISASTER_EFFECT_DURATION_TICKS = 100;
         static final int DISASTER_COOLDOWN_TICKS = 100;
         static final float METEOR_DAMAGE = 8.0F;
         static final int BLIZZARD_FREEZE_TICKS = 200;
     }
-    
+
     private static Config config;
 
     private ConfigManager() {
@@ -137,6 +138,10 @@ public final class ConfigManager {
             config.buff = new Config.Buff();
             configRepaired = true;
         }
+        if (config.scoreboard == null) {
+            config.scoreboard = new Config.Scoreboard();
+            configRepaired = true;
+        }
         if (config.disaster == null) {
             config.disaster = new Config.Disaster();
             configRepaired = true;
@@ -149,14 +154,18 @@ public final class ConfigManager {
 
     private static void logConfigValues() {
         LOGGER.info("Configuration loaded successfully:");
-        LOGGER.info("  Game: Build phase {}t, PvP phase {}t, Countdown {}t", 
+        LOGGER.info("  Game: Build phase {}t, PvP phase {}t, Countdown {}t",
                 config.game.buildPhaseTicks, config.game.pvpPhaseTicks, config.game.countdownDurationTicks);
-        LOGGER.info("  Player: Boundary check {}t, Death penalty {}, Warning cooldown {}ms", 
-                config.player.boundaryCheckInterval, config.player.deathPenalty, config.player.boundaryWarningCooldownMs);
-        LOGGER.info("  Buffs: Update interval {}t, Duration {}t", 
+        LOGGER.info("  Player: Boundary check {}t, Death penalty {}, Warning cooldown {}ms",
+                config.player.boundaryCheckInterval, config.player.deathPenalty,
+                config.player.boundaryWarningCooldownMs);
+        LOGGER.info("  Buffs: Update interval {}t, Duration {}t",
                 config.buff.buffUpdateInterval, config.buff.buffDurationTicks);
-        LOGGER.info("  Disasters: Interval {}t, Meteor damage {}, Blizzard freeze {}t", 
-                config.disaster.disasterIntervalTicks, config.disaster.meteorDamage, config.disaster.blizzardFreezeTicks);
+        LOGGER.info("  Scoreboard: Update interval {}t",
+                config.scoreboard.updateInterval);
+        LOGGER.info("  Disasters: Interval {}t, Meteor damage {}, Blizzard freeze {}t",
+                config.disaster.disasterIntervalTicks, config.disaster.meteorDamage,
+                config.disaster.blizzardFreezeTicks);
     }
 
     /**
@@ -165,65 +174,74 @@ public final class ConfigManager {
      */
     private static void validateAndCorrectConfig() {
         boolean corrected = false;
-        
+
         // Validate game settings with reasonable bounds
         if (config.game.buildPhaseTicks <= 0 || config.game.buildPhaseTicks > Integer.MAX_VALUE / 2) {
             config.game.buildPhaseTicks = Defaults.BUILD_PHASE_TICKS;
             LOGGER.warn("Invalid buildPhaseTicks, reset to default: {}", config.game.buildPhaseTicks);
             corrected = true;
         }
-        
+
         if (config.game.pvpPhaseTicks <= 0 || config.game.pvpPhaseTicks > Integer.MAX_VALUE / 2) {
             config.game.pvpPhaseTicks = Defaults.PVP_PHASE_TICKS;
             LOGGER.warn("Invalid pvpPhaseTicks, reset to default: {}", config.game.pvpPhaseTicks);
             corrected = true;
         }
-        
+
         if (config.game.countdownDurationTicks <= 0 || config.game.countdownDurationTicks > 20 * 60) { // Max 1 minute
             config.game.countdownDurationTicks = Defaults.COUNTDOWN_DURATION_TICKS;
             LOGGER.warn("Invalid countdownDurationTicks, reset to default: {}", config.game.countdownDurationTicks);
             corrected = true;
         }
-        
+
         // Validate player settings with reasonable bounds
         if (config.player.boundaryCheckInterval <= 0 || config.player.boundaryCheckInterval > 20 * 60) { // Max 1 minute
             config.player.boundaryCheckInterval = Defaults.BOUNDARY_CHECK_INTERVAL;
             LOGGER.warn("Invalid boundaryCheckInterval, reset to default: {}", config.player.boundaryCheckInterval);
             corrected = true;
         }
-        
+
         if (config.player.deathPenalty < 0 || config.player.deathPenalty > 1000) { // Reasonable max
             config.player.deathPenalty = Defaults.DEATH_PENALTY;
             LOGGER.warn("Invalid deathPenalty, reset to default: {}", config.player.deathPenalty);
             corrected = true;
         }
-        
+
         // Validate buff settings
         if (config.buff.buffUpdateInterval <= 0 || config.buff.buffUpdateInterval > 20 * 60) { // Max 1 minute
             config.buff.buffUpdateInterval = Defaults.BUFF_UPDATE_INTERVAL;
             LOGGER.warn("Invalid buffUpdateInterval, reset to default: {}", config.buff.buffUpdateInterval);
             corrected = true;
         }
-        
+
         if (config.buff.buffDurationTicks <= 0 || config.buff.buffDurationTicks > 20 * 60 * 5) { // Max 5 minutes
             config.buff.buffDurationTicks = Defaults.BUFF_DURATION_TICKS;
             LOGGER.warn("Invalid buffDurationTicks, reset to default: {}", config.buff.buffDurationTicks);
             corrected = true;
         }
-        
+
+        // Validate scoreboard settings
+        if (config.scoreboard.updateInterval <= 0 || config.scoreboard.updateInterval > 20 * 60) { // Max 1 minute
+            config.scoreboard.updateInterval = Defaults.SCOREBOARD_UPDATE_INTERVAL;
+            LOGGER.warn("Invalid scoreboard updateInterval, reset to default: {}", config.scoreboard.updateInterval);
+            corrected = true;
+        }
+
         // Validate disaster settings
-        if (config.disaster.disasterIntervalTicks <= 0 || config.disaster.disasterIntervalTicks > 20 * 60 * 60) { // Max 1 hour
+        if (config.disaster.disasterIntervalTicks <= 0 || config.disaster.disasterIntervalTicks > 20 * 60 * 60) { // Max
+                                                                                                                  // 1
+                                                                                                                  // hour
             config.disaster.disasterIntervalTicks = Defaults.DISASTER_INTERVAL_TICKS;
             LOGGER.warn("Invalid disasterIntervalTicks, reset to default: {}", config.disaster.disasterIntervalTicks);
             corrected = true;
         }
-        
+
         if (config.disaster.meteorDamage <= 0 || config.disaster.meteorDamage > 100.0F) { // Max 50 hearts
             config.disaster.meteorDamage = Defaults.METEOR_DAMAGE;
             LOGGER.warn("Invalid meteorDamage, reset to default: {}", config.disaster.meteorDamage);
             corrected = true;
         }
-        
+
         if (corrected) {
             saveConfig();
         }
@@ -237,7 +255,7 @@ public final class ConfigManager {
                 .getConfigDir()
                 .resolve(CONFIG_FILENAME)
                 .toFile();
-        
+
         try (FileWriter writer = new FileWriter(configFile)) {
             GSON.toJson(config, writer);
             LOGGER.debug("Configuration saved to {}", CONFIG_FILENAME);
@@ -285,6 +303,11 @@ public final class ConfigManager {
         return config.buff.buffDurationTicks;
     }
 
+    // Scoreboard settings getters
+    public static int getScoreboardUpdateInterval() {
+        return config.scoreboard.updateInterval;
+    }
+
     // Disaster settings getters
     public static int getDisasterIntervalTicks() {
         return config.disaster.disasterIntervalTicks;
@@ -315,6 +338,7 @@ public final class ConfigManager {
         Game game = new Game();
         Player player = new Player();
         Buff buff = new Buff();
+        Scoreboard scoreboard = new Scoreboard();
         Disaster disaster = new Disaster();
 
         /**
@@ -366,6 +390,17 @@ public final class ConfigManager {
             int buffUpdateInterval = Defaults.BUFF_UPDATE_INTERVAL;
             /** Duration in ticks for island buffs. Default: 80 ticks (4 seconds). */
             int buffDurationTicks = Defaults.BUFF_DURATION_TICKS;
+        }
+
+        /**
+         * Settings related to scoreboard display and updates.
+         */
+        static class Scoreboard {
+            /**
+             * Interval in ticks for updating scoreboard scores and team assignments.
+             * Default: 20 ticks (1 second).
+             */
+            int updateInterval = Defaults.SCOREBOARD_UPDATE_INTERVAL;
         }
 
         /**

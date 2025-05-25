@@ -119,8 +119,8 @@ public class GameManager {
         setAllPlayersGameMode(server, GameMode.SURVIVAL);
         server.getPlayerManager().broadcast(Text.literal("Game started! Build phase begins."), false);
 
-        // Initialize scoreboard
-        ScoreboardManager.initialize(server);
+        // Force update teams and scores to reflect current game state
+        ScoreboardManager.updateAllTeams(server);
     }
 
     /**
