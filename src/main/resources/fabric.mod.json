@@ -1,34 +1,35 @@
 {
-	"schemaVersion": 1,
-	"id": "stormbound-isles",
-	"version": "${version}",
-	"name": "Stormbound Isles",
-	"description": "Explore the mystical Stormbound Isles: new islands filled with dangers, rare resources, and ancient secrets that take your Minecraft adventure to a whole new level!",
-	"authors": [
-		"no_felix"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "CC0-1.0",
-	"icon": "assets/stormbound-isles/icon.png",
-	"environment": "server",
-	"entrypoints": {
-		"main": [
-			"de.nofelix.stormboundisles.StormboundIslesMod"
-		]
-	},
-	"mixins": [
-		"stormbound-isles.mixins.json"
-	],
-	"depends": {
-		"fabricloader": ">=0.16.13",
-		"minecraft": "~1.21.1",
-		"java": ">=21",
-		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
-	}
+  "schemaVersion": 1,
+  "id": "stormbound-isles",
+  "version": "${version}",
+  "name": "Stormbound Isles",
+  "description": "Explore the mystical Stormbound Isles: new islands filled with dangers, rare resources, and ancient secrets that take your Minecraft adventure to a whole new level!",
+  "authors": ["no_felix"],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "CC0-1.0",
+  "icon": "assets/stormbound-isles/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["de.nofelix.stormboundisles.StormboundIslesMod"],
+    "client": ["de.nofelix.StormboundIslesClient"]
+  },
+  "mixins": [
+    "stormbound-isles.mixins.json",
+    {
+      "config": "stormbound-isles.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.13",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
 }

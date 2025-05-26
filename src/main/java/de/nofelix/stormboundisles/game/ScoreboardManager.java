@@ -146,6 +146,7 @@ public class ScoreboardManager {
 					true,
 					null);
 
+			// Set to sidebar initially to ensure client synchronization
 			scoreboard.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, objective);
 
 			StormboundIslesMod.LOGGER.debug("Created and configured scoreboard objective: {}",

@@ -1,10 +1,9 @@
 {
-	"required": true,
-	"package": "de.nofelix.mixin.client",
-	"compatibilityLevel": "JAVA_21",
-	"client": [
-	],
-	"injectors": {
-		"defaultRequire": 1
-	}
+  "required": true,
+  "package": "de.nofelix.stormboundisles.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["ScoreboardRenderMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
