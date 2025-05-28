@@ -18,15 +18,15 @@ import java.util.Objects;
  * ```java
  * // Create a rectangular island territory
  * Zone territory = Zone.createRectangle(
- *     new BlockPos(0, 64, 0), 
- *     new BlockPos(100, 64, 100)
+ * new BlockPos(0, 64, 0),
+ * new BlockPos(100, 64, 100)
  * );
  * 
  * // Create a custom polygon territory
  * List<BlockPos> vertices = List.of(
- *     new BlockPos(0, 64, 0),
- *     new BlockPos(50, 64, 25),
- *     new BlockPos(25, 64, 75)
+ * new BlockPos(0, 64, 0),
+ * new BlockPos(50, 64, 25),
+ * new BlockPos(25, 64, 75)
  * );
  * Zone territory = new Zone(vertices);
  * 
@@ -35,13 +35,13 @@ import java.util.Objects;
  * ```
  */
 public final class Zone {
-    
+
     // Constants
     private static final double EDGE_TOLERANCE = 0.01;
     private static final double BLOCK_CENTER_OFFSET = 0.5;
     private static final int MIN_POLYGON_VERTICES = 3;
     private static final int RECTANGLE_VERTICES = 4;
-    
+
     // Core properties (immutable)
     @NotNull
     private final List<BlockPos> points;
@@ -53,8 +53,10 @@ public final class Zone {
      * in the Y direction. Only X and Z coordinates are used for containment
      * checking - Y coordinates in the vertices are ignored.
      *
-     * @param points The list of BlockPos points defining the zone's polygon vertices
-     * @throws IllegalArgumentException if points is null, empty, or contains fewer than 3 vertices
+     * @param points The list of BlockPos points defining the zone's polygon
+     *               vertices
+     * @throws IllegalArgumentException if points is null, empty, or contains fewer
+     *                                  than 3 vertices
      */
     public Zone(@NotNull List<BlockPos> points) {
         validatePolygonPoints(points);
@@ -62,7 +64,7 @@ public final class Zone {
     }
 
     // Static factory methods
-    
+
     /**
      * Creates a rectangular zone from two corner points.
      * 
@@ -88,17 +90,17 @@ public final class Zone {
 
         // Create vertices in clockwise order for consistency
         List<BlockPos> rectanglePoints = List.of(
-            new BlockPos(minX, y, minZ), // Top-left
-            new BlockPos(maxX, y, minZ), // Top-right
-            new BlockPos(maxX, y, maxZ), // Bottom-right
-            new BlockPos(minX, y, maxZ)  // Bottom-left
+                new BlockPos(minX, y, minZ), // Top-left
+                new BlockPos(maxX, y, minZ), // Top-right
+                new BlockPos(maxX, y, maxZ), // Bottom-right
+                new BlockPos(minX, y, maxZ) // Bottom-left
         );
 
         return new Zone(rectanglePoints);
     }
 
     // Getters
-    
+
     /**
      * Gets an unmodifiable list of vertices defining this polygon.
      * Note: Y coordinates in vertices are not used for containment checking.
@@ -120,7 +122,7 @@ public final class Zone {
     }
 
     // Territory containment checking methods
-    
+
     /**
      * Checks if the given position is contained within this territorial zone.
      * 
@@ -134,7 +136,7 @@ public final class Zone {
      */
     public boolean contains(@NotNull BlockPos pos) {
         validatePosition(pos);
-        
+
         // Check if point is exactly on polygon edge
         if (isOnPolygonEdge(pos)) {
             return true;
@@ -144,7 +146,7 @@ public final class Zone {
     }
 
     // State check methods
-    
+
     /**
      * Checks if this zone represents a rectangle.
      *
@@ -155,7 +157,7 @@ public final class Zone {
     }
 
     // Private helper methods
-    
+
     /**
      * Validates that polygon points meet the minimum requirements.
      */
@@ -165,11 +167,15 @@ public final class Zone {
         }
         if (points.size() < MIN_POLYGON_VERTICES) {
             throw new IllegalArgumentException(
-                "A polygon zone requires at least %d points, got %d".formatted(MIN_POLYGON_VERTICES, points.size())
-            );
+                    "A polygon zone requires at least %d points, got %d".formatted(MIN_POLYGON_VERTICES,
+                            points.size()));
         }
-        if (points.contains(null)) {
-            throw new IllegalArgumentException("Points list cannot contain null positions");
+
+        // Manual null check to avoid NPE in List.contains(null) with immutable lists
+        for (int i = 0; i < points.size(); i++) {
+            if (points.get(i) == null) {
+                throw new IllegalArgumentException("Point at index %d cannot be null".formatted(i));
+            }
         }
     }
 
@@ -216,12 +222,12 @@ public final class Zone {
 
         for (int i = 0; i < n; i++) {
             int j = (i + 1) % n; // Next vertex (wrapping to 0 for last vertex)
-            
+
             if (isPointOnLineSegment(x, z, points.get(i), points.get(j))) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -234,7 +240,7 @@ public final class Zone {
         double z1 = getCenterZ(vertex1);
         double x2 = getCenterX(vertex2);
         double z2 = getCenterZ(vertex2);
-        
+
         return calculateDistanceToLineSegmentSquared(x, z, x1, z1, x2, z2) < EDGE_TOLERANCE;
     }
 
@@ -243,12 +249,12 @@ public final class Zone {
      * Uses only X and Z coordinates.
      */
     private static double calculateDistanceToLineSegmentSquared(
-            double pointX, double pointZ, 
-            double lineX1, double lineZ1, 
+            double pointX, double pointZ,
+            double lineX1, double lineZ1,
             double lineX2, double lineZ2) {
-        
+
         double lineLength = (lineX2 - lineX1) * (lineX2 - lineX1) + (lineZ2 - lineZ1) * (lineZ2 - lineZ1);
-        
+
         if (lineLength == 0.0) {
             // Line segment is actually a point
             return (pointX - lineX1) * (pointX - lineX1) + (pointZ - lineZ1) * (pointZ - lineZ1);
@@ -278,7 +284,7 @@ public final class Zone {
 
         for (int i = 0; i < n; i++) {
             int j = (i + 1) % n; // Next vertex (wrapping)
-            
+
             double xi = getCenterX(points.get(i));
             double zi = getCenterZ(points.get(i));
             double xj = getCenterX(points.get(j));
@@ -294,7 +300,7 @@ public final class Zone {
     }
 
     // Object methods
-    
+
     @Override
     public boolean equals(Object obj) {
         return obj instanceof Zone other && Objects.equals(points, other.points);
@@ -310,12 +316,11 @@ public final class Zone {
         return "Zone{vertices=%d, bounds=(%d,%d) to (%d,%d)}".formatted(
                 points.size(),
                 getMinX(), getMinZ(),
-                getMaxX(), getMaxZ()
-        );
+                getMaxX(), getMaxZ());
     }
 
     // Additional utility methods for 2D bounds
-    
+
     /**
      * Gets the minimum X coordinate among all vertices.
      */
