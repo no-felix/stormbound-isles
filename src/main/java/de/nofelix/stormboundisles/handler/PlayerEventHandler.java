@@ -5,6 +5,7 @@ import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
 import de.nofelix.stormboundisles.data.Team;
+import de.nofelix.stormboundisles.data.Zone;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
@@ -17,6 +18,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -90,7 +92,16 @@ public final class PlayerEventHandler {
 				lastBoundaryWarning.put(player.getUuid(), now);
 			}
 
-			if (island.getSpawnY() >= 0) {
+			// Calculate a safe position just inside the boundary
+			BlockPos safePos = calculateSafePositionInsideBoundary(player.getBlockPos(), island.getZone());
+			if (safePos != null) {
+				ServerWorld world = player.getServerWorld();
+				player.teleport(
+						world,
+						safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5,
+						player.getYaw(), player.getPitch());
+			} else if (island.getSpawnY() >= 0) {
+				// Fallback to spawn point if safe position calculation fails
 				ServerWorld world = player.getServerWorld();
 				player.teleport(
 						world,
@@ -135,5 +146,137 @@ public final class PlayerEventHandler {
 						player.getYaw(), player.getPitch());
 			}
 		});
+	}
+
+	/**
+	 * Calculates a safe position just inside the boundary when a player is outside their zone.
+	 * This method finds the nearest point inside the zone boundary and moves the player there
+	 * instead of teleporting them back to the spawn point.
+	 *
+	 * @param playerPos The current position of the player (outside the boundary)
+	 * @param zone The island zone boundary
+	 * @return A safe BlockPos inside the boundary, or null if calculation fails
+	 */
+	private static BlockPos calculateSafePositionInsideBoundary(BlockPos playerPos, Zone zone) {
+		List<BlockPos> zonePoints = zone.getPoints();
+		if (zonePoints.isEmpty()) {
+			return null;
+		}
+
+		// Find the center of the zone as a reference point inside the boundary
+		double centerX = zonePoints.stream().mapToInt(BlockPos::getX).average().orElse(0);
+		double centerZ = zonePoints.stream().mapToInt(BlockPos::getZ).average().orElse(0);
+		BlockPos center = new BlockPos((int) Math.round(centerX), playerPos.getY(), (int) Math.round(centerZ));
+
+		// If center is not inside the zone (for complex shapes), find a point that is
+		if (!zone.contains(center)) {
+			center = findPointInsideZone(zone, playerPos.getY());
+			if (center == null) {
+				return null;
+			}
+		}
+
+		// Calculate direction from player to center
+		double dirX = (double) center.getX() - playerPos.getX();
+		double dirZ = (double) center.getZ() - playerPos.getZ();
+		double distance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+
+		if (distance == 0) {
+			return center; // Player is at center, just return center
+		}
+
+		// Normalize direction vector
+		dirX /= distance;
+		dirZ /= distance;
+
+		// Move player towards center until we find a position inside the boundary
+		// Start with a small step and increase if needed
+		for (int step = 1; step <= 10; step++) {
+			int newX = (int) Math.round(playerPos.getX() + dirX * step);
+			int newZ = (int) Math.round(playerPos.getZ() + dirZ * step);
+			BlockPos candidatePos = new BlockPos(newX, playerPos.getY(), newZ);
+
+			if (zone.contains(candidatePos)) {
+				return candidatePos;
+			}
+		}
+
+		// If the simple approach failed, try to find the closest point on the boundary
+		return findClosestPointInsideBoundary(playerPos, zone);
+	}
+
+	/**
+	 * Finds any point inside the zone using the first vertex as a starting point.
+	 * For complex polygons where the center might be outside.
+	 */
+	private static BlockPos findPointInsideZone(Zone zone, int y) {
+		List<BlockPos> points = zone.getPoints();
+		if (points.size() < 3) {
+			return null;
+		}
+
+		// For a triangle or simple polygon, try the centroid of first 3 points
+		BlockPos p1 = points.get(0);
+		BlockPos p2 = points.get(1);
+		BlockPos p3 = points.get(2);
+
+		int centroidX = (p1.getX() + p2.getX() + p3.getX()) / 3;
+		int centroidZ = (p1.getZ() + p2.getZ() + p3.getZ()) / 3;
+		BlockPos centroid = new BlockPos(centroidX, y, centroidZ);
+
+		if (zone.contains(centroid)) {
+			return centroid;
+		}
+
+		// If centroid fails, try moving slightly inward from the first edge
+		int midX = (p1.getX() + p2.getX()) / 2;
+		int midZ = (p1.getZ() + p2.getZ()) / 2;
+
+		// Calculate perpendicular direction inward (simplified approach)
+		int perpX = -(p2.getZ() - p1.getZ());
+		int perpZ = p2.getX() - p1.getX();
+
+		// Try a few positions moving inward
+		for (int i = 1; i <= 5; i++) {
+			int testX = midX + (perpX > 0 ? i : -i);
+			int testZ = midZ + (perpZ > 0 ? i : -i);
+			BlockPos testPos = new BlockPos(testX, y, testZ);
+
+			if (zone.contains(testPos)) {
+				return testPos;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Finds the closest valid position inside the boundary using a more sophisticated approach.
+	 */
+	private static BlockPos findClosestPointInsideBoundary(BlockPos playerPos, Zone zone) {
+		// Simple grid search around the player position
+		int searchRadius = 10;
+		BlockPos closestPos = null;
+		double closestDistance = Double.MAX_VALUE;
+
+		for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+			for (int dz = -searchRadius; dz <= searchRadius; dz++) {
+				BlockPos candidatePos = new BlockPos(
+					playerPos.getX() + dx,
+					playerPos.getY(),
+					playerPos.getZ() + dz
+				);
+
+				if (zone.contains(candidatePos)) {
+					double distance = Math.sqrt((double) dx * dx + (double) dz * dz);
+					if (distance < closestDistance) {
+						closestDistance = distance;
+						closestPos = candidatePos;
+					}
+				}
+			}
+		}
+
+		return closestPos;
 	}
 }
