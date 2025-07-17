@@ -30,6 +30,10 @@ import java.util.UUID;
 public final class PlayerEventHandler {
 	private static int boundaryCheckCounter = 0;
 	private static final Map<UUID, Long> lastBoundaryWarning = new HashMap<>();
+	
+	private static final int MAX_REPOSITION_STEPS = 10;
+	private static final int SEARCH_RADIUS = 10;
+	private static final int MAX_INWARD_ATTEMPTS = 5;
 
 	private PlayerEventHandler() {
 	}
@@ -191,7 +195,7 @@ public final class PlayerEventHandler {
 
 		// Move player towards center until we find a position inside the boundary
 		// Start with a small step and increase if needed
-		for (int step = 1; step <= 10; step++) {
+		for (int step = 1; step <= MAX_REPOSITION_STEPS; step++) {
 			int newX = (int) Math.round(playerPos.getX() + dirX * step);
 			int newZ = (int) Math.round(playerPos.getZ() + dirZ * step);
 			BlockPos candidatePos = new BlockPos(newX, playerPos.getY(), newZ);
@@ -237,7 +241,7 @@ public final class PlayerEventHandler {
 		int perpZ = p2.getX() - p1.getX();
 
 		// Try a few positions moving inward
-		for (int i = 1; i <= 5; i++) {
+		for (int i = 1; i <= MAX_INWARD_ATTEMPTS; i++) {
 			int testX = midX + (perpX > 0 ? i : -i);
 			int testZ = midZ + (perpZ > 0 ? i : -i);
 			BlockPos testPos = new BlockPos(testX, y, testZ);
@@ -254,13 +258,11 @@ public final class PlayerEventHandler {
 	 * Finds the closest valid position inside the boundary using a more sophisticated approach.
 	 */
 	private static BlockPos findClosestPointInsideBoundary(BlockPos playerPos, Zone zone) {
-		// Simple grid search around the player position
-		int searchRadius = 10;
 		BlockPos closestPos = null;
 		double closestDistance = Double.MAX_VALUE;
 
-		for (int dx = -searchRadius; dx <= searchRadius; dx++) {
-			for (int dz = -searchRadius; dz <= searchRadius; dz++) {
+		for (int dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
+			for (int dz = -SEARCH_RADIUS; dz <= SEARCH_RADIUS; dz++) {
 				BlockPos candidatePos = new BlockPos(
 					playerPos.getX() + dx,
 					playerPos.getY(),
