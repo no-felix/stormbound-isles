@@ -62,4 +62,12 @@ public class Constants {
 	 * milliseconds
 	 */
 	public static final String RESET_CONFIRMATION_MESSAGE = "⚠ WARNING: This will delete ALL game data. Run command again within 10 seconds to confirm.";
+
+	// Boundary Repositioning Constants
+	/** Maximum steps to reposition a player inside the boundary. */
+	public static final int MAX_REPOSITION_STEPS = 10;
+	/** Search radius for closest point inside boundary. */
+	public static final int SEARCH_RADIUS = 10;
+	/** Maximum attempts to move inward from boundary edge. */
+	public static final int MAX_INWARD_ATTEMPTS = 5;
 }

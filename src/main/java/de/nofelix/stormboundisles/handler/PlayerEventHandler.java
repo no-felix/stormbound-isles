@@ -9,6 +9,7 @@ import de.nofelix.stormboundisles.data.Zone;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
+import de.nofelix.stormboundisles.util.Constants;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
@@ -30,10 +31,7 @@ import java.util.UUID;
 public final class PlayerEventHandler {
 	private static int boundaryCheckCounter = 0;
 	private static final Map<UUID, Long> lastBoundaryWarning = new HashMap<>();
-	
-	private static final int MAX_REPOSITION_STEPS = 10;
-	private static final int SEARCH_RADIUS = 10;
-	private static final int MAX_INWARD_ATTEMPTS = 5;
+	// Use centralized constants from Constants.java
 
 	private PlayerEventHandler() {
 	}
@@ -106,6 +104,7 @@ public final class PlayerEventHandler {
 						player.getYaw(), player.getPitch());
 			} else if (island.getSpawnY() >= 0) {
 				// Fallback to spawn point if safe position calculation fails
+				StormboundIslesMod.LOGGER.warn("Safe boundary repositioning failed for player {}, teleporting to spawn.", player.getName().getString());
 				ServerWorld world = player.getServerWorld();
 				player.teleport(
 						world,
@@ -195,7 +194,7 @@ public final class PlayerEventHandler {
 
 		// Move player towards center until we find a position inside the boundary
 		// Start with a small step and increase if needed
-		for (int step = 1; step <= MAX_REPOSITION_STEPS; step++) {
+		for (int step = 1; step <= Constants.MAX_REPOSITION_STEPS; step++) {
 			int newX = (int) Math.round(playerPos.getX() + dirX * step);
 			int newZ = (int) Math.round(playerPos.getZ() + dirZ * step);
 			BlockPos candidatePos = new BlockPos(newX, playerPos.getY(), newZ);
@@ -241,7 +240,7 @@ public final class PlayerEventHandler {
 		int perpZ = p2.getX() - p1.getX();
 
 		// Try a few positions moving inward
-		for (int i = 1; i <= MAX_INWARD_ATTEMPTS; i++) {
+		for (int i = 1; i <= de.nofelix.stormboundisles.util.Constants.MAX_INWARD_ATTEMPTS; i++) {
 			int testX = midX + (perpX > 0 ? i : -i);
 			int testZ = midZ + (perpZ > 0 ? i : -i);
 			BlockPos testPos = new BlockPos(testX, y, testZ);
@@ -261,8 +260,8 @@ public final class PlayerEventHandler {
 		BlockPos closestPos = null;
 		double closestDistance = Double.MAX_VALUE;
 
-		for (int dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx++) {
-			for (int dz = -SEARCH_RADIUS; dz <= SEARCH_RADIUS; dz++) {
+		for (int dx = -de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dx <= de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dx++) {
+			for (int dz = -de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dz <= de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dz++) {
 				BlockPos candidatePos = new BlockPos(
 					playerPos.getX() + dx,
 					playerPos.getY(),
