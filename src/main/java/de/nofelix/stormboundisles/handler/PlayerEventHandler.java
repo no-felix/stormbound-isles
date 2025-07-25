@@ -104,7 +104,9 @@ public final class PlayerEventHandler {
 						player.getYaw(), player.getPitch());
 			} else if (island.getSpawnY() >= 0) {
 				// Fallback to spawn point if safe position calculation fails
-				StormboundIslesMod.LOGGER.warn("Safe boundary repositioning failed for player {}, teleporting to spawn.", player.getName().getString());
+				StormboundIslesMod.LOGGER.warn(
+						"Safe boundary repositioning failed for player {}, teleporting to spawn.",
+						player.getName().getString());
 				ServerWorld world = player.getServerWorld();
 				player.teleport(
 						world,
@@ -152,12 +154,14 @@ public final class PlayerEventHandler {
 	}
 
 	/**
-	 * Calculates a safe position just inside the boundary when a player is outside their zone.
-	 * This method finds the nearest point inside the zone boundary and moves the player there
+	 * Calculates a safe position just inside the boundary when a player is outside
+	 * their zone.
+	 * This method finds the nearest point inside the zone boundary and moves the
+	 * player there
 	 * instead of teleporting them back to the spawn point.
 	 *
 	 * @param playerPos The current position of the player (outside the boundary)
-	 * @param zone The island zone boundary
+	 * @param zone      The island zone boundary
 	 * @return A safe BlockPos inside the boundary, or null if calculation fails
 	 */
 	private static BlockPos calculateSafePositionInsideBoundary(BlockPos playerPos, Zone zone) {
@@ -167,9 +171,9 @@ public final class PlayerEventHandler {
 		}
 
 		// Find the center of the zone as a reference point inside the boundary
-		double centerX = zonePoints.stream().mapToInt(BlockPos::getX).average().orElse(0);
-		double centerZ = zonePoints.stream().mapToInt(BlockPos::getZ).average().orElse(0);
-		BlockPos center = new BlockPos((int) Math.round(centerX), playerPos.getY(), (int) Math.round(centerZ));
+		int centerX = (int) zonePoints.stream().mapToInt(BlockPos::getX).average().orElse(0);
+		int centerZ = (int) zonePoints.stream().mapToInt(BlockPos::getZ).average().orElse(0);
+		BlockPos center = new BlockPos(centerX, playerPos.getY(), centerZ);
 
 		// If center is not inside the zone (for complex shapes), find a point that is
 		if (!zone.contains(center)) {
@@ -180,23 +184,23 @@ public final class PlayerEventHandler {
 		}
 
 		// Calculate direction from player to center
-		double dirX = (double) center.getX() - playerPos.getX();
-		double dirZ = (double) center.getZ() - playerPos.getZ();
-		double distance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+		int dirX = center.getX() - playerPos.getX();
+		int dirZ = center.getZ() - playerPos.getZ();
+		double distance = Math.sqrt((double) dirX * dirX + (double) dirZ * dirZ);
 
 		if (distance == 0) {
 			return center; // Player is at center, just return center
 		}
 
 		// Normalize direction vector
-		dirX /= distance;
-		dirZ /= distance;
+		double normalizedDirX = dirX / distance;
+		double normalizedDirZ = dirZ / distance;
 
 		// Move player towards center until we find a position inside the boundary
 		// Start with a small step and increase if needed
 		for (int step = 1; step <= Constants.MAX_REPOSITION_STEPS; step++) {
-			int newX = (int) Math.round(playerPos.getX() + dirX * step);
-			int newZ = (int) Math.round(playerPos.getZ() + dirZ * step);
+			int newX = (int) Math.round(playerPos.getX() + normalizedDirX * step);
+			int newZ = (int) Math.round(playerPos.getZ() + normalizedDirZ * step);
 			BlockPos candidatePos = new BlockPos(newX, playerPos.getY(), newZ);
 
 			if (zone.contains(candidatePos)) {
@@ -254,24 +258,24 @@ public final class PlayerEventHandler {
 	}
 
 	/**
-	 * Finds the closest valid position inside the boundary using a more sophisticated approach.
+	 * Finds the closest valid position inside the boundary using a more
+	 * sophisticated approach.
 	 */
 	private static BlockPos findClosestPointInsideBoundary(BlockPos playerPos, Zone zone) {
 		BlockPos closestPos = null;
-		double closestDistance = Double.MAX_VALUE;
+		int closestDistanceSquared = Integer.MAX_VALUE;
 
 		for (int dx = -de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dx <= de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dx++) {
 			for (int dz = -de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dz <= de.nofelix.stormboundisles.util.Constants.SEARCH_RADIUS; dz++) {
 				BlockPos candidatePos = new BlockPos(
-					playerPos.getX() + dx,
-					playerPos.getY(),
-					playerPos.getZ() + dz
-				);
+						playerPos.getX() + dx,
+						playerPos.getY(),
+						playerPos.getZ() + dz);
 
 				if (zone.contains(candidatePos)) {
-					double distance = Math.sqrt((double) dx * dx + (double) dz * dz);
-					if (distance < closestDistance) {
-						closestDistance = distance;
+					int distanceSquared = dx * dx + dz * dz;
+					if (distanceSquared < closestDistanceSquared) {
+						closestDistanceSquared = distanceSquared;
 						closestPos = candidatePos;
 					}
 				}
