@@ -87,16 +87,14 @@ public class BuffAuraHandler {
 	private static void applyBuff(ServerPlayerEntity player, IslandType type) {
 		int duration = ConfigManager.getBuffDurationTicks();
 		StatusEffectInstance effect = switch (type) {
-			case DESERT ->
+			case SAHRAKIR ->
 				new StatusEffectInstance(StatusEffects.SPEED, duration, 0, true, AMBIENT, SHOW_PARTICLES);
-			case VOLCANO ->
+			case PYROTHAR ->
 				new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, duration, 0, true, AMBIENT, SHOW_PARTICLES);
-			case ICE ->
+			case FROSTREIGN ->
 				new StatusEffectInstance(StatusEffects.RESISTANCE, duration, 0, true, AMBIENT, SHOW_PARTICLES);
-			case MUSHROOM ->
+			case AURALIS ->
 				new StatusEffectInstance(StatusEffects.REGENERATION, duration, 0, true, AMBIENT, SHOW_PARTICLES);
-			case CRYSTAL ->
-				new StatusEffectInstance(StatusEffects.HASTE, duration, 0, true, AMBIENT, SHOW_PARTICLES);
 		};
 		player.addStatusEffect(effect);
 	}

@@ -14,11 +14,11 @@
 
 ## 🎮 Overview
 
-Stormbound Isles is a sophisticated Minecraft mod built with Fabric that transforms multiplayer gameplay into an elemental battleground. Five teams compete across unique themed islands while facing dynamic disasters and strategic challenges in multiple game phases.
+Stormbound Isles is a sophisticated Minecraft mod built with Fabric that transforms multiplayer gameplay into an elemental battleground. Four teams compete across unique themed islands while facing dynamic disasters and strategic challenges in multiple game phases.
 
 ### 🌟 Key Features
 
-- **🏝️ Five Elemental Islands**: Volcano, Ice, Desert, Mushroom, and Crystal biomes with unique mechanics
+- **🏝️ Four Elemental Islands**: Pyrothar, Frostreign, Sahrakir, and Auralis biomes with unique mechanics
 - **⚡ Dynamic Disaster System**: Random or triggered catastrophes that reshape gameplay
 - **🛡️ Team Passive Buffs**: Location and island-based bonuses using custom [`BuffAuraHandler`](src/main/java/de/nofelix/stormboundisles/handler/BuffAuraHandler.java)
 - **📊 Multi-Phase Gameplay**: Build phase protection → PvP phase → Scoring evaluation
@@ -65,9 +65,9 @@ The mod features a hierarchical permission system with three levels:
 ### Example Commands
 ```
 /sbi admin game start              # Start the game
-/sbi team assign volcano player1   # Assign player to team
+/sbi team assign pyrothar player1  # Assign player to team
 /sbi island setspawn island_01     # Set island spawn point
-/sbi points add volcano 100 "Building bonus"
+/sbi points add pyrothar 100 "Building bonus"
 ```
 
 ## 🎯 Game Flow

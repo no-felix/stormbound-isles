@@ -490,11 +490,10 @@ public class ScoreboardManager {
 	 */
 	private static Formatting getTeamColor(Team team) {
 		return switch (team.getName().toUpperCase()) {
-			case "VOLCANO" -> Formatting.RED;
-			case "ICE" -> Formatting.AQUA;
-			case "DESERT" -> Formatting.YELLOW;
-			case "MUSHROOM" -> Formatting.LIGHT_PURPLE;
-			case "CRYSTAL" -> Formatting.BLUE;
+			case "PYROTHAR" -> Formatting.RED;
+			case "FROSTREIGN" -> Formatting.AQUA;
+			case "SAHRAKIR" -> Formatting.YELLOW;
+			case "AURALIS" -> Formatting.LIGHT_PURPLE;
 			default -> Formatting.WHITE;
 		};
 	}

@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
  * 
  * Example usage:
  * ```java
- * Island island = new Island("island_01", IslandType.VOLCANO);
+ * Island island = new Island("island_01", IslandType.PYROTHAR);
  * island.setTeamName("red");
  * island.setSpawnPoint(100, 64, 200);
  * ```

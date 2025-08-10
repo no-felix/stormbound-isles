@@ -52,11 +52,10 @@ public final class DisasterManager {
 
     // Island type to disaster mappings
     private static final Map<IslandType, DisasterType[]> ISLAND_DISASTER_TYPES = Map.of(
-            IslandType.VOLCANO, new DisasterType[] { DisasterType.METEOR },
-            IslandType.ICE, new DisasterType[] { DisasterType.BLIZZARD },
-            IslandType.DESERT, new DisasterType[] { DisasterType.SANDSTORM },
-            IslandType.MUSHROOM, new DisasterType[] { DisasterType.SPORE },
-            IslandType.CRYSTAL, new DisasterType[] { DisasterType.CRYSTAL_STORM });
+            IslandType.PYROTHAR, new DisasterType[] { DisasterType.METEOR },
+            IslandType.FROSTREIGN, new DisasterType[] { DisasterType.BLIZZARD },
+            IslandType.SAHRAKIR, new DisasterType[] { DisasterType.SANDSTORM },
+            IslandType.AURALIS, new DisasterType[] { DisasterType.SPORE, DisasterType.CRYSTAL_STORM });
 
     // Disaster effect implementations
     private static final Map<DisasterType, DisasterEffect> DISASTER_EFFECTS = Map.of(
