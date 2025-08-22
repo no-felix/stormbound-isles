@@ -39,9 +39,9 @@ public final class PlayerEventHandler {
 		StormboundIslesMod.LOGGER.info("Registering PlayerEventHandler");
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, src) -> {
 			if (entity instanceof ServerPlayerEntity player) {
-				handlePlayerDeath(player);
 				StormboundIslesMod.LOGGER.info(
 						"Player {} died, handling death event.", player.getName().getString());
+				handlePlayerDeath(player);
 			}
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerEventHandler::onServerTick);
@@ -128,11 +128,28 @@ public final class PlayerEventHandler {
 
 			DataManager.saveAll();
 			Island isl = DataManager.getIsland(t.getIslandId());
-			if (isl != null && isl.hasSpawnPoint()) {
-				player.teleport(
-						player.getServerWorld(),
-						isl.getSpawnX() + 0.5, isl.getSpawnY(), isl.getSpawnZ() + 0.5,
-						player.getYaw(), player.getPitch());
+
+			// Only revive and force-teleport players during the BUILD phase.
+			// In PVP phase (or other phases) we leave the normal death behavior intact
+			// so players remain dead on hardcore servers.
+			if (isl != null && isl.hasSpawnPoint() && GameManager.phase == GamePhase.BUILD) {
+				ServerWorld world = player.getServerWorld();
+				int tx = isl.getSpawnX();
+				int ty = isl.getSpawnY();
+				int tz = isl.getSpawnZ();
+
+				player.teleport(world, tx + 0.5, ty, tz + 0.5, player.getYaw(), player.getPitch());
+
+				// Revive
+				try {
+					player.setHealth(player.getMaxHealth());
+				} catch (Throwable ex) {
+					StormboundIslesMod.LOGGER.warn("Failed to set health for player {}: {}",
+							player.getName().getString(), ex.getMessage());
+				}
+
+				// Safety
+				player.teleport(world, tx + 0.5, ty, tz + 0.5, player.getYaw(), player.getPitch());
 			}
 		});
 	}
