@@ -41,6 +41,8 @@ public final class ConfigManager {
         static final int PVP_PHASE_TICKS = 20 * 60 * 60 * 24 * 7; // 1 week
         static final int COUNTDOWN_DURATION_TICKS = 20 * 10; // 10 seconds
         static final int BOUNDARY_CHECK_INTERVAL = 10;
+        static final double BOUNDARY_PUSH_STEP = 1.0;
+        static final int BOUNDARY_PUSH_MAX_STEPS = 10;
         static final int DEATH_PENALTY = 10;
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
@@ -159,6 +161,8 @@ public final class ConfigManager {
         LOGGER.info("  Player: Boundary check {}t, Death penalty {}, Warning cooldown {}ms",
                 config.player.boundaryCheckInterval, config.player.deathPenalty,
                 config.player.boundaryWarningCooldownMs);
+        LOGGER.info("    Boundary push step {} blocks, max attempts {}",
+                config.player.boundaryPushStep, config.player.boundaryPushMaxSteps);
         LOGGER.info("  Buffs: Update interval {}t, Duration {}t",
                 config.buff.buffUpdateInterval, config.buff.buffDurationTicks);
         LOGGER.info("  Scoreboard: Update interval {}t",
@@ -204,6 +208,19 @@ public final class ConfigManager {
         if (config.player.deathPenalty < 0 || config.player.deathPenalty > 1000) { // Reasonable max
             config.player.deathPenalty = Defaults.DEATH_PENALTY;
             LOGGER.warn("Invalid deathPenalty, reset to default: {}", config.player.deathPenalty);
+            corrected = true;
+        }
+
+        // Validate boundary push settings
+        if (config.player.boundaryPushStep <= 0.0 || config.player.boundaryPushStep > 100.0) {
+            config.player.boundaryPushStep = Defaults.BOUNDARY_PUSH_STEP;
+            LOGGER.warn("Invalid boundaryPushStep, reset to default: {}", config.player.boundaryPushStep);
+            corrected = true;
+        }
+
+        if (config.player.boundaryPushMaxSteps <= 0 || config.player.boundaryPushMaxSteps > 100) {
+            config.player.boundaryPushMaxSteps = Defaults.BOUNDARY_PUSH_MAX_STEPS;
+            LOGGER.warn("Invalid boundaryPushMaxSteps, reset to default: {}", config.player.boundaryPushMaxSteps);
             corrected = true;
         }
 
@@ -294,6 +311,15 @@ public final class ConfigManager {
         return config.player.resetConfirmationTimeoutMs;
     }
 
+    // New player push-back getters
+    public static double getPlayerBoundaryPushStep() {
+        return config.player.boundaryPushStep;
+    }
+
+    public static int getPlayerBoundaryPushMaxSteps() {
+        return config.player.boundaryPushMaxSteps;
+    }
+
     // Buff settings getters
     public static int getBuffUpdateInterval() {
         return config.buff.buffUpdateInterval;
@@ -377,6 +403,10 @@ public final class ConfigManager {
              * data reset. Default: 10000ms (10 seconds).
              */
             long resetConfirmationTimeoutMs = Defaults.RESET_CONFIRMATION_TIMEOUT_MS;
+            /** How far to push a player back per corrective step (blocks). */
+            double boundaryPushStep = Defaults.BOUNDARY_PUSH_STEP;
+            /** Maximum number of corrective push attempts. */
+            int boundaryPushMaxSteps = Defaults.BOUNDARY_PUSH_MAX_STEPS;
         }
 
         /**
