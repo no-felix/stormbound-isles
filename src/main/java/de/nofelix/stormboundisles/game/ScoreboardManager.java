@@ -9,9 +9,17 @@ import de.nofelix.stormboundisles.util.Constants;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.scoreboard.*;
+import net.minecraft.scoreboard.ScoreboardPlayerScore;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardCriterion;
+import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.ScoreboardDisplayS2CPacket;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
@@ -44,6 +52,9 @@ public class ScoreboardManager {
 	private ScoreboardManager() {
 		throw new UnsupportedOperationException("Utility class");
 	}
+
+	// Track players who need a follow-up scoreboard sync (retry next tick)
+	private static final Set<java.util.UUID> pendingScoreboardSync = ConcurrentHashMap.newKeySet();
 
 	/**
 	 * Initializes the scoreboard management system.
@@ -85,12 +96,68 @@ public class ScoreboardManager {
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			currentServer = server;
-			assignPlayerToTeam(handler.player);
+			ServerPlayerEntity player = handler.player;
+			assignPlayerToTeam(player);
+
+			// Ensure the sidebar objective is set on the server scoreboard so it syncs to
+			// the joining client
+			try {
+				if (objective != null) {
+					int sidebarId = Scoreboard.getDisplaySlotId("sidebar");
+					server.getScoreboard().setObjectiveSlot(sidebarId, objective);
+
+					// Explicitly send objective and display packets to the joining player to force
+					// a client-side sync
+					try {
+						if (player != null && player.networkHandler != null) {
+							// constructor is (ScoreboardObjective, int)
+							player.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, 0));
+							player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(sidebarId, objective));
+							// Ensure we retry once on the next tick in case the client wasn't ready yet
+							pendingScoreboardSync.add(player.getUuid());
+						}
+					} catch (Exception ex) {
+						StormboundIslesMod.LOGGER.warn(
+								"Failed to send explicit scoreboard packets to joining player: {}", ex.toString());
+					}
+				}
+			} catch (Exception e) {
+				StormboundIslesMod.LOGGER.warn("Failed to sync scoreboard objective to joining player: {}",
+						e.toString());
+			}
 		});
 
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			currentServer = server;
 			removePlayerFromTeams(handler.player);
+		});
+
+		// Retry sending scoreboard packets at the start of the next server tick for
+		// newly-joined players
+		ServerTickEvents.START_SERVER_TICK.register(server -> {
+			if (pendingScoreboardSync.isEmpty())
+				return;
+			try {
+				for (java.util.UUID uuid : pendingScoreboardSync.toArray(new java.util.UUID[0])) {
+					ServerPlayerEntity p = server.getPlayerManager().getPlayer(uuid);
+					if (p == null || p.networkHandler == null) {
+						// player not present (left quickly) - remove from pending
+						pendingScoreboardSync.remove(uuid);
+						continue;
+					}
+					try {
+						int sidebarId = Scoreboard.getDisplaySlotId("sidebar");
+						p.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, 0));
+						p.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(sidebarId, objective));
+					} catch (Exception ex) {
+						StormboundIslesMod.LOGGER.warn("Retry failed to send scoreboard packets to {}: {}",
+								p.getGameProfile().getName(), ex.toString());
+					}
+					pendingScoreboardSync.remove(uuid);
+				}
+			} catch (Exception e) {
+				StormboundIslesMod.LOGGER.warn("Error during scoreboard sync retry tick: {}", e.toString());
+			}
 		});
 
 		StormboundIslesMod.LOGGER.info("ScoreboardManager event listeners registered.");
@@ -142,12 +209,16 @@ public class ScoreboardManager {
 					Constants.SCOREBOARD_OBJECTIVE_NAME,
 					ScoreboardCriterion.DUMMY,
 					Text.literal(Constants.SCOREBOARD_TITLE),
-					ScoreboardCriterion.RenderType.INTEGER,
-					true,
-					null);
+					ScoreboardCriterion.RenderType.INTEGER);
 
-			// Set to sidebar initially to ensure client synchronization
-			scoreboard.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, objective);
+			// Ensure the objective is assigned to the sidebar display slot so the client
+			// HUD will render it
+			try {
+				int sidebarId = Scoreboard.getDisplaySlotId("sidebar");
+				scoreboard.setObjectiveSlot(sidebarId, objective);
+			} catch (Exception e) {
+				StormboundIslesMod.LOGGER.warn("Could not set objective to sidebar display slot: {}", e.toString());
+			}
 
 			StormboundIslesMod.LOGGER.debug("Created and configured scoreboard objective: {}",
 					Constants.SCOREBOARD_OBJECTIVE_NAME);
@@ -204,7 +275,7 @@ public class ScoreboardManager {
 
 		DataManager.getTeams().values().forEach(team -> {
 			String displayName = getDisplayNameForTeam(team);
-			ScoreAccess score = scoreboard.getOrCreateScore(ScoreHolder.fromName(displayName), objective);
+			ScoreboardPlayerScore score = scoreboard.getPlayerScore(displayName, objective);
 			if (score != null) {
 				score.setScore(team.getPoints());
 			} else {
@@ -228,7 +299,7 @@ public class ScoreboardManager {
 				.ifPresentOrElse(
 						team -> {
 							String displayName = getDisplayNameForTeam(team);
-							ScoreAccess score = scoreboard.getOrCreateScore(ScoreHolder.fromName(displayName),
+							ScoreboardPlayerScore score = scoreboard.getPlayerScore(displayName,
 									objective);
 							if (score != null) {
 								score.setScore(team.getPoints());
@@ -348,7 +419,7 @@ public class ScoreboardManager {
 
 		if (sbTeam != null) {
 			if (!sbTeam.getPlayerList().contains(playerName)) {
-				scoreboard.addScoreHolderToTeam(playerName, sbTeam);
+				scoreboard.addPlayerToTeam(playerName, sbTeam);
 				StormboundIslesMod.LOGGER.info("Added player {} to scoreboard team {}", playerName, teamName);
 			} else {
 				StormboundIslesMod.LOGGER.debug("Player {} already in scoreboard team {}", playerName, teamName);
@@ -384,16 +455,16 @@ public class ScoreboardManager {
 		DataManager.getTeams().keySet().forEach(teamName -> {
 			net.minecraft.scoreboard.Team sbTeam = scoreboard.getTeam(teamName);
 			if (sbTeam != null && sbTeam.getPlayerList().contains(playerName)) {
-				scoreboard.removeScoreHolderFromTeam(playerName, sbTeam);
+				scoreboard.removePlayerFromTeam(playerName, sbTeam);
 				StormboundIslesMod.LOGGER.info("Removed player {} from scoreboard team {}", playerName, teamName);
 			}
 		});
 
 		// Remove from non-DataManager teams
-		AbstractTeam playerTeam = scoreboard.getScoreHolderTeam(playerName);
+		AbstractTeam playerTeam = scoreboard.getPlayerTeam(playerName);
 		if (playerTeam instanceof net.minecraft.scoreboard.Team team &&
 				DataManager.getTeam(playerTeam.getName()) == null) {
-			scoreboard.removeScoreHolderFromTeam(playerName, team);
+			scoreboard.removePlayerFromTeam(playerName, team);
 			StormboundIslesMod.LOGGER.info("Removed player {} from non-DataManager scoreboard team {}.",
 					playerName, playerTeam.getName());
 		}
@@ -440,13 +511,13 @@ public class ScoreboardManager {
 	private static void reassignAllOnlinePlayers(MinecraftServer server) {
 		server.getPlayerManager().getPlayerList().forEach(player -> {
 			String playerName = player.getGameProfile().getName();
-			AbstractTeam currentSbTeam = scoreboard.getScoreHolderTeam(playerName);
+			AbstractTeam currentSbTeam = scoreboard.getPlayerTeam(playerName);
 			Optional<Team> dataManagerTeam = findPlayerTeam(player.getUuid());
 
 			// Remove from incorrect team
 			if (currentSbTeam instanceof net.minecraft.scoreboard.Team team &&
 					(dataManagerTeam.isEmpty() || !currentSbTeam.getName().equals(dataManagerTeam.get().getName()))) {
-				scoreboard.removeScoreHolderFromTeam(playerName, team);
+				scoreboard.removePlayerFromTeam(playerName, team);
 				StormboundIslesMod.LOGGER.debug("Removed player {} from incorrect scoreboard team {} during refresh.",
 						playerName, currentSbTeam.getName());
 			}
