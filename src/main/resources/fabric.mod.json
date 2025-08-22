@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "id": "stormbound-isles",
+  "id": "stormboundisles",
   "version": "${version}",
   "name": "Stormbound Isles",
   "description": "Explore the mystical Stormbound Isles: new islands filled with dangers, rare resources, and ancient secrets that take your Minecraft adventure to a whole new level!",
   "authors": ["no_felix"],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "homepage": "https://no-felix.github.io/stormbound-isles-nextjs/",
+    "sources": "https://github.com/no-felix/stormbound-isles"
   },
   "license": "CC0-1.0",
-  "icon": "assets/stormbound-isles/icon.png",
+  "icon": "icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["de.nofelix.stormboundisles.StormboundIslesMod"],
@@ -28,8 +28,5 @@
     "minecraft": "~1.21.1",
     "java": ">=21",
     "fabric-api": "*"
-  },
-  "suggests": {
-    "another-mod": "*"
   }
 }
