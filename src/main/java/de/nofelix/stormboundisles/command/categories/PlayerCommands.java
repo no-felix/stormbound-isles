@@ -96,12 +96,12 @@ public class PlayerCommands implements CommandCategory {
         String teamInfo = Constants.NO_TEAM;
         for (Team team : DataManager.getTeams().values()) {
             if (team.getMembers().contains(player.getUuid())) {
-                teamInfo = Constants.TEAM_PREFIX + team.getName() + Constants.RESET;
+                teamInfo = team.getName();
                 break;
             }
         }
 
-        sb.append(Constants.TEAM_PREFIX).append(teamInfo).append("\n");
+        sb.append(Constants.TEAM_PREFIX).append(teamInfo).append(Constants.RESET).append("\n");
         sb.append(Constants.POSITION_PREFIX).append(player.getBlockPos().getX())
                 .append(", ").append(player.getBlockPos().getY())
                 .append(", ").append(player.getBlockPos().getZ())
@@ -111,11 +111,11 @@ public class PlayerCommands implements CommandCategory {
         String currentIsland = Constants.NO_ISLAND;
         for (Island island : DataManager.getIslands().values()) {
             if (island.getZone() != null && island.getZone().contains(player.getBlockPos())) {
-                currentIsland = Constants.ISLAND_PREFIX + island.getId() + Constants.RESET;
+                currentIsland = island.getId();
                 break;
             }
         }
-        sb.append(Constants.ISLAND_PREFIX).append(currentIsland);
+        sb.append(Constants.ISLAND_PREFIX).append(currentIsland).append(Constants.RESET);
 
         ctx.getSource().sendFeedback(() -> Text.literal(sb.toString()), false);
         return 1;
