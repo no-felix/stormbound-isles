@@ -478,7 +478,7 @@ public class ScoreboardManager {
 	 * @param team The team to generate a display name for
 	 * @return Formatted display name
 	 */
-	private static String getDisplayNameForTeam(Team team) {
+	public static String getDisplayNameForTeam(Team team) {
 		return getTeamColor(team) + team.getName();
 	}
 
@@ -488,7 +488,7 @@ public class ScoreboardManager {
 	 * @param team The team to get color for
 	 * @return The formatting color for the team
 	 */
-	private static Formatting getTeamColor(Team team) {
+	public static Formatting getTeamColor(Team team) {
 		return switch (team.getName().toUpperCase()) {
 			case "PYROTHAR" -> Formatting.RED;
 			case "FROSTREIGN" -> Formatting.AQUA;
