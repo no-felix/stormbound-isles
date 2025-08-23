@@ -17,11 +17,15 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.world.World;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.damage.DamageSource;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.util.Formatting;
 
 /**
  * Handles player-related events: death penalties and boundary enforcement
@@ -34,6 +38,18 @@ public final class PlayerEventHandler {
 	private PlayerEventHandler() {
 	}
 
+	private static Formatting getTeamColor(Team team) {
+		if (team == null)
+			return Formatting.WHITE;
+		return switch (team.getName().toUpperCase()) {
+			case "PYROTHAR" -> Formatting.RED;
+			case "FROSTREIGN" -> Formatting.AQUA;
+			case "SAHRAKIR" -> Formatting.YELLOW;
+			case "AURALIS" -> Formatting.LIGHT_PURPLE;
+			default -> Formatting.WHITE;
+		};
+	}
+
 	/**
 	 * Registers death and tick listeners.
 	 */
@@ -43,7 +59,7 @@ public final class PlayerEventHandler {
 			if (entity instanceof ServerPlayerEntity player) {
 				StormboundIslesMod.LOGGER.info(
 						"Player {} died, handling death event.", player.getName().getString());
-				handlePlayerDeath(player);
+				handlePlayerDeath(player, src);
 			}
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerEventHandler::onServerTick);
@@ -212,9 +228,8 @@ public final class PlayerEventHandler {
 	/**
 	 * Applies point penalty on player death during BUILD or PVP phases.
 	 */
-	private static void handlePlayerDeath(ServerPlayerEntity player) {
-		if (GameManager.phase != GamePhase.BUILD
-				&& GameManager.phase != GamePhase.PVP) {
+	private static void handlePlayerDeath(ServerPlayerEntity player, DamageSource src) {
+		if (GameManager.phase != GamePhase.BUILD && GameManager.phase != GamePhase.PVP) {
 			return;
 		}
 
@@ -224,42 +239,181 @@ public final class PlayerEventHandler {
 				.findFirst();
 
 		team.ifPresent(t -> {
-			int penalty = ConfigManager.getPlayerDeathPenalty();
-			t.addPoints(-penalty);
-			ScoreboardManager.updateTeamScore(t.getName());
-
-			String msg = "Team " + t.getName() + " lost " + penalty +
-					" points (Player death: " + player.getName().getString() + ")";
-			StormboundIslesMod.LOGGER.info(msg);
-			player.getServer()
-					.getPlayerManager()
-					.broadcast(Text.literal(msg), false);
-
-			DataManager.saveAll();
-			Island isl = DataManager.getIsland(t.getIslandId());
-
-			// Only revive and force-teleport players during the BUILD phase.
-			// In PVP phase (or other phases) we leave the normal death behavior intact
-			// so players remain dead on hardcore servers.
-			if (isl != null && isl.hasSpawnPoint() && GameManager.phase == GamePhase.BUILD) {
-				ServerWorld world = player.getServerWorld();
-				int tx = isl.getSpawnX();
-				int ty = isl.getSpawnY();
-				int tz = isl.getSpawnZ();
-
-				player.teleport(world, tx + 0.5, ty, tz + 0.5, player.getYaw(), player.getPitch());
-
-				// Revive
-				try {
-					player.setHealth(player.getMaxHealth());
-				} catch (Throwable ex) {
-					StormboundIslesMod.LOGGER.warn("Failed to set health for player {}: {}",
-							player.getName().getString(), ex.getMessage());
-				}
-
-				// Safety
-				player.teleport(world, tx + 0.5, ty, tz + 0.5, player.getYaw(), player.getPitch());
-			}
+			applyDeathPenalty(t, player);
+			awardKillReward(t, player, src);
+			reviveAndTeleportPlayer(t, player);
 		});
+	}
+
+	/**
+	 * Applies the configured death penalty to the victim's team and broadcasts it.
+	 */
+	private static void applyDeathPenalty(Team victimTeam, ServerPlayerEntity victim) {
+		int penalty = ConfigManager.getPlayerDeathPenalty();
+		victimTeam.addPoints(-penalty);
+		ScoreboardManager.updateTeamScore(victimTeam.getName());
+
+		// Format: Team <colored-name> lost <points> points (Player
+		// death: <player>)
+		String coloredTeam = getTeamColor(victimTeam) + "Team " + victimTeam.getName() + Formatting.RESET;
+		String msg = coloredTeam + " lost §e" + penalty +
+				" §cpoints §7(§ePlayer death: §f" + victim.getName().getString() + "§7)";
+		StormboundIslesMod.LOGGER.info("Death broadcast: {}", msg);
+		victim.getServer().getPlayerManager().broadcast(Text.literal(msg), false);
+
+		DataManager.saveAll();
+	}
+
+	/**
+	 * Awards the configurable kill reward to the killer's team if the killer was a
+	 * player
+	 * and is from a different island/team than the victim.
+	 */
+	private static void awardKillReward(Team victimTeam, ServerPlayerEntity victim, DamageSource src) {
+		try {
+			Optional<ServerPlayerEntity> maybeKiller = resolveKillerFromDamageSource(src, victim);
+			if (maybeKiller.isEmpty())
+				return;
+
+			ServerPlayerEntity killer = maybeKiller.get();
+			UUID kid = killer.getUuid();
+			Optional<Team> kteam = DataManager.getTeams().values().stream()
+					.filter(x -> x.getMembers().contains(kid))
+					.findFirst();
+
+			kteam.ifPresent(kt -> {
+				// Only award if killer is from a different island/team
+				if (kt.getIslandId() == null || !kt.getIslandId().equals(victimTeam.getIslandId())) {
+					int reward = ConfigManager.getPlayerKillReward();
+					kt.addPoints(reward);
+					ScoreboardManager.updateTeamScore(kt.getName());
+					// Format: Team <colored-name> gained <points> points (Kill:
+					// <player>)
+					String kcoloredTeam = getTeamColor(kt) + "Team " + kt.getName() + Formatting.RESET;
+					String kmsg = kcoloredTeam + " gained §e" + reward +
+							" §apoints §7(§eKill: §f" + killer.getName().getString() + "§7)";
+					StormboundIslesMod.LOGGER.info("Kill broadcast: {}", kmsg);
+					victim.getServer().getPlayerManager().broadcast(Text.literal(kmsg), false);
+					DataManager.saveAll();
+				}
+			});
+		} catch (Exception e) {
+			StormboundIslesMod.LOGGER.warn("Failed to resolve owner via getOwner on attacker: {}", e.getMessage());
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Revives and teleports the victim back to their island spawn during BUILD
+	 * phase if configured.
+	 */
+	private static void reviveAndTeleportPlayer(Team victimTeam, ServerPlayerEntity victim) {
+		if (GameManager.phase != GamePhase.BUILD)
+			return;
+
+		Island isl = DataManager.getIsland(victimTeam.getIslandId());
+		if (isl == null || !isl.hasSpawnPoint())
+			return;
+
+		ServerWorld world = victim.getServerWorld();
+		int tx = isl.getSpawnX();
+		int ty = isl.getSpawnY();
+		int tz = isl.getSpawnZ();
+
+		// Teleport to spawn
+		victim.teleport(world, tx + 0.5, ty, tz + 0.5, victim.getYaw(), victim.getPitch());
+
+		// Revive (best effort)
+		try {
+			victim.setHealth(victim.getMaxHealth());
+		} catch (Exception e) {
+			StormboundIslesMod.LOGGER.warn("Failed to resolve owner via getOwnerUuid on attacker: {}", e.getMessage());
+			e.printStackTrace();
+		}
+
+		// Safety repeat teleport
+		victim.teleport(world, tx + 0.5, ty, tz + 0.5, victim.getYaw(), victim.getPitch());
+	}
+
+	/**
+	 * Try to call a no-arg getOwner() on the attacker and return a player owner if
+	 * present.
+	 */
+	private static Optional<ServerPlayerEntity> getOwnerEntityViaGetOwner(Entity attacker) {
+		if (attacker == null)
+			return Optional.empty();
+		try {
+			Method m = attacker.getClass().getMethod("getOwner");
+			Object owner = m.invoke(attacker);
+			if (owner instanceof ServerPlayerEntity serverOwner)
+				return Optional.of(serverOwner);
+			if (owner instanceof Entity ent && ent instanceof ServerPlayerEntity serverOwner2)
+				return Optional.of(serverOwner2);
+		} catch (NoSuchMethodException | SecurityException ignored) {
+			// Method not present on this attacker type, that's fine.
+		} catch (Exception e) {
+			StormboundIslesMod.LOGGER.debug("getOwner reflection failed: {}", e.getMessage());
+		}
+		return Optional.empty();
+	}
+
+	/**
+	 * Try to call getOwnerUuid() on the attacker and resolve an online player by
+	 * UUID.
+	 */
+	private static Optional<ServerPlayerEntity> getOwnerEntityViaGetOwnerUuid(Entity attacker,
+			ServerPlayerEntity victim) {
+		if (attacker == null || victim == null)
+			return Optional.empty();
+		try {
+			Method m2 = attacker.getClass().getMethod("getOwnerUuid");
+			Object val = m2.invoke(attacker);
+			if (val instanceof UUID uuid) {
+				ServerPlayerEntity p = victim.getServer().getPlayerManager().getPlayer(uuid);
+				if (p != null)
+					return Optional.of(p);
+			} else if (val instanceof String s) {
+				try {
+					UUID uuid = UUID.fromString(s);
+					ServerPlayerEntity p = victim.getServer().getPlayerManager().getPlayer(uuid);
+					if (p != null)
+						return Optional.of(p);
+				} catch (IllegalArgumentException ignored) {
+					// Not a UUID string
+				}
+			}
+		} catch (NoSuchMethodException | SecurityException ignored) {
+			// Method not present; ignore
+		} catch (Exception e) {
+			StormboundIslesMod.LOGGER.debug("getOwnerUuid reflection failed: {}", e.getMessage());
+		}
+		return Optional.empty();
+	}
+
+	/**
+	 * Attempts to resolve the killer player from the provided DamageSource.
+	 * Supports direct player attackers, projectiles with owners, and tameable
+	 * entities
+	 * exposing an owner UUID via common method names using reflection.
+	 */
+	private static Optional<ServerPlayerEntity> resolveKillerFromDamageSource(DamageSource src,
+			ServerPlayerEntity victim) {
+		if (src == null)
+			return Optional.empty();
+
+		Entity direct = src.getAttacker();
+		if (direct instanceof ServerPlayerEntity serverPlayer)
+			return Optional.of(serverPlayer);
+
+		if (direct == null)
+			return Optional.empty();
+
+		// Try owner via getOwner()
+		Optional<ServerPlayerEntity> maybe = getOwnerEntityViaGetOwner(direct);
+		if (maybe.isPresent())
+			return maybe;
+
+		// Try owner via getOwnerUuid()
+		return getOwnerEntityViaGetOwnerUuid(direct, victim);
 	}
 }
