@@ -51,10 +51,17 @@ public final class ConfigManager {
         static final int BUFF_DURATION_TICKS = 20 * 60; // 1 minute
         static final int SCOREBOARD_UPDATE_INTERVAL = 20; // 1 second
         static final int DISASTER_INTERVAL_TICKS = 20 * 60 * 5; // 5 minutes
-        static final int DISASTER_EFFECT_DURATION_TICKS = 100;
-        static final int DISASTER_COOLDOWN_TICKS = 100;
+        static final int DISASTER_EFFECT_DURATION_TICKS = 20 * 30; // 600 ticks
+        static final int DISASTER_COOLDOWN_TICKS = 20 * 60 * 3; // 3600 ticks
+        static final int DISASTER_PULSE_INTERVAL_TICKS = 20 * 25; // 500 ticks
         static final float METEOR_DAMAGE = 8.0F;
-        static final int BLIZZARD_FREEZE_TICKS = 200;
+        static final int BLIZZARD_FREEZE_TICKS = 20 * 20; // 400 ticks
+        static final float FIRE_SHOWER_DAMAGE = 4.0F;
+        static final int ICE_SPIKES_SLOW_AMPLIFIER = 1;
+        static final int MIRAGE_DURATION_CAP_TICKS = 20 * 30; // 600 ticks
+        static final int SANDSTORM_BLIND_AMPLIFIER = 0;
+        static final int SPORE_POISON_AMPLIFIER = 0;
+        static final int CRYSTAL_STORM_LEVITATION_AMPLIFIER = 0;
     }
 
     private static Config config;
@@ -173,6 +180,14 @@ public final class ConfigManager {
         LOGGER.info("  Disasters: Interval {}t, Meteor damage {}, Blizzard freeze {}t",
                 config.disaster.disasterIntervalTicks, config.disaster.meteorDamage,
                 config.disaster.blizzardFreezeTicks);
+        LOGGER.info("    Fire shower damage {}, Ice spike amp {}, Mirage cap {}t",
+                config.disaster.fireShowerDamage, config.disaster.iceSpikesSlowAmplifier,
+                config.disaster.mirageDurationCapTicks);
+        LOGGER.info("    Sandstorm blind amp {}, Spore poison amp {}, Crystal levitation amp {}",
+                config.disaster.sandstormBlindAmplifier, config.disaster.sporePoisonAmplifier,
+                config.disaster.crystalStormLevitationAmplifier);
+        LOGGER.info("    Disaster pulse interval {}t",
+                config.disaster.disasterPulseIntervalTicks);
     }
 
     /**
@@ -294,6 +309,55 @@ public final class ConfigManager {
             corrected = true;
         }
 
+        if (config.disaster.disasterPulseIntervalTicks <= 0
+                || config.disaster.disasterPulseIntervalTicks > 20 * 60 * 60) { // Max 1 hour
+            config.disaster.disasterPulseIntervalTicks = Defaults.DISASTER_PULSE_INTERVAL_TICKS;
+            LOGGER.warn("Invalid disasterPulseIntervalTicks, reset to default: {}",
+                    config.disaster.disasterPulseIntervalTicks);
+            corrected = true;
+        }
+
+        if (config.disaster.fireShowerDamage <= 0 || config.disaster.fireShowerDamage > 100.0F) {
+            config.disaster.fireShowerDamage = Defaults.FIRE_SHOWER_DAMAGE;
+            LOGGER.warn("Invalid fireShowerDamage, reset to default: {}", config.disaster.fireShowerDamage);
+            corrected = true;
+        }
+
+        if (config.disaster.iceSpikesSlowAmplifier < 0 || config.disaster.iceSpikesSlowAmplifier > 5) {
+            config.disaster.iceSpikesSlowAmplifier = Defaults.ICE_SPIKES_SLOW_AMPLIFIER;
+            LOGGER.warn("Invalid iceSpikesSlowAmplifier, reset to default: {}", config.disaster.iceSpikesSlowAmplifier);
+            corrected = true;
+        }
+
+        if (config.disaster.mirageDurationCapTicks <= 0 || config.disaster.mirageDurationCapTicks > 20 * 60 * 5) { // Max
+                                                                                                                   // 5
+                                                                                                                   // minutes
+            config.disaster.mirageDurationCapTicks = Defaults.MIRAGE_DURATION_CAP_TICKS;
+            LOGGER.warn("Invalid mirageDurationCapTicks, reset to default: {}", config.disaster.mirageDurationCapTicks);
+            corrected = true;
+        }
+
+        if (config.disaster.sandstormBlindAmplifier < 0 || config.disaster.sandstormBlindAmplifier > 5) {
+            config.disaster.sandstormBlindAmplifier = Defaults.SANDSTORM_BLIND_AMPLIFIER;
+            LOGGER.warn("Invalid sandstormBlindAmplifier, reset to default: {}",
+                    config.disaster.sandstormBlindAmplifier);
+            corrected = true;
+        }
+
+        if (config.disaster.sporePoisonAmplifier < 0 || config.disaster.sporePoisonAmplifier > 5) {
+            config.disaster.sporePoisonAmplifier = Defaults.SPORE_POISON_AMPLIFIER;
+            LOGGER.warn("Invalid sporePoisonAmplifier, reset to default: {}", config.disaster.sporePoisonAmplifier);
+            corrected = true;
+        }
+
+        if (config.disaster.crystalStormLevitationAmplifier < 0
+                || config.disaster.crystalStormLevitationAmplifier > 5) {
+            config.disaster.crystalStormLevitationAmplifier = Defaults.CRYSTAL_STORM_LEVITATION_AMPLIFIER;
+            LOGGER.warn("Invalid crystalStormLevitationAmplifier, reset to default: {}",
+                    config.disaster.crystalStormLevitationAmplifier);
+            corrected = true;
+        }
+
         return corrected;
     }
 
@@ -390,6 +454,34 @@ public final class ConfigManager {
 
     public static int getDisasterBlizzardFreezeTicks() {
         return config.disaster.blizzardFreezeTicks;
+    }
+
+    public static float getDisasterFireShowerDamage() {
+        return config.disaster.fireShowerDamage;
+    }
+
+    public static int getDisasterIceSpikesSlowAmplifier() {
+        return config.disaster.iceSpikesSlowAmplifier;
+    }
+
+    public static int getDisasterMirageDurationCapTicks() {
+        return config.disaster.mirageDurationCapTicks;
+    }
+
+    public static int getDisasterSandstormBlindAmplifier() {
+        return config.disaster.sandstormBlindAmplifier;
+    }
+
+    public static int getDisasterSporePoisonAmplifier() {
+        return config.disaster.sporePoisonAmplifier;
+    }
+
+    public static int getDisasterCrystalStormLevitationAmplifier() {
+        return config.disaster.crystalStormLevitationAmplifier;
+    }
+
+    public static int getDisasterPulseIntervalTicks() {
+        return config.disaster.disasterPulseIntervalTicks;
     }
 
     // Inner classes
@@ -504,6 +596,24 @@ public final class ConfigManager {
              * Default: 200 ticks (10 seconds).
              */
             int blizzardFreezeTicks = Defaults.BLIZZARD_FREEZE_TICKS;
+            /** Damage for FIRE_SHOWER disaster. Default: 4.0F. */
+            float fireShowerDamage = Defaults.FIRE_SHOWER_DAMAGE;
+            /**
+             * Amplifier for ICE_SPIKES slowness (0 = Slowness I). Default: 1 (Slowness II).
+             */
+            int iceSpikesSlowAmplifier = Defaults.ICE_SPIKES_SLOW_AMPLIFIER;
+            /** Maximum duration cap (ticks) for MIRAGE. Default: 200 ticks. */
+            int mirageDurationCapTicks = Defaults.MIRAGE_DURATION_CAP_TICKS;
+            /** Blindness amplifier for SANDSTORM (0 = Blindness I). */
+            int sandstormBlindAmplifier = Defaults.SANDSTORM_BLIND_AMPLIFIER;
+            /** Poison amplifier for SPORE (0 = Poison I). */
+            int sporePoisonAmplifier = Defaults.SPORE_POISON_AMPLIFIER;
+            /** Levitation amplifier for CRYSTAL_STORM (0 = Levitation I). */
+            int crystalStormLevitationAmplifier = Defaults.CRYSTAL_STORM_LEVITATION_AMPLIFIER;
+            /**
+             * How often (ticks) to reapply disaster effects while the disaster is active.
+             */
+            int disasterPulseIntervalTicks = Defaults.DISASTER_PULSE_INTERVAL_TICKS;
         }
     }
 }
