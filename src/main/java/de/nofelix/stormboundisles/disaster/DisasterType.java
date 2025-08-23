@@ -13,5 +13,11 @@ public enum DisasterType {
 	/** A toxic spore cloud disaster causing poison. */
 	SPORE,
 	/** A levitating crystal storm disaster causing levitation. */
-	CRYSTAL_STORM
+	CRYSTAL_STORM,
+	/** A fiery shower that ignites players and deals fire damage. */
+	FIRE_SHOWER,
+	/** Sharp ice spikes that slow players (intense cold). */
+	ICE_SPIKES,
+	/** A disorienting mirage effect causing nausea. */
+	MIRAGE
 }

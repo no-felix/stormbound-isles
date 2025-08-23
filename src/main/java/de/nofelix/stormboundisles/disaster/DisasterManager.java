@@ -37,10 +37,12 @@ import java.util.concurrent.ThreadLocalRandom;
  * Example usage:
  * ```java
  * // Trigger a specific disaster
- * boolean triggered = DisasterManager.triggerDisaster(server, "island_01", DisasterType.METEOR);
+ * boolean triggered = DisasterManager.triggerDisaster(server, "island_01",
+ * DisasterType.METEOR);
  * 
  * // Cancel active disasters
- * boolean cancelled = DisasterManager.cancelActiveDisaster(server, "island_01");
+ * boolean cancelled = DisasterManager.cancelActiveDisaster(server,
+ * "island_01");
  * ```
  */
 public final class DisasterManager {
@@ -52,18 +54,25 @@ public final class DisasterManager {
 
     // Island type to disaster mappings
     private static final Map<IslandType, DisasterType[]> ISLAND_DISASTER_TYPES = Map.of(
-            IslandType.PYROTHAR, new DisasterType[] { DisasterType.METEOR },
-            IslandType.FROSTREIGN, new DisasterType[] { DisasterType.BLIZZARD },
-            IslandType.SAHRAKIR, new DisasterType[] { DisasterType.SANDSTORM },
+            IslandType.PYROTHAR, new DisasterType[] { DisasterType.METEOR, DisasterType.FIRE_SHOWER },
+            IslandType.FROSTREIGN, new DisasterType[] { DisasterType.BLIZZARD, DisasterType.ICE_SPIKES },
+            IslandType.SAHRAKIR, new DisasterType[] { DisasterType.SANDSTORM, DisasterType.MIRAGE },
             IslandType.AURALIS, new DisasterType[] { DisasterType.SPORE, DisasterType.CRYSTAL_STORM });
 
     // Disaster effect implementations
-    private static final Map<DisasterType, DisasterEffect> DISASTER_EFFECTS = Map.of(
-            DisasterType.METEOR, DisasterManager::applyMeteorEffect,
-            DisasterType.BLIZZARD, DisasterManager::applyBlizzardEffect,
-            DisasterType.SANDSTORM, DisasterManager::applySandstormEffect,
-            DisasterType.SPORE, DisasterManager::applySporeEffect,
-            DisasterType.CRYSTAL_STORM, DisasterManager::applyCrystalStormEffect);
+    private static final Map<DisasterType, DisasterEffect> DISASTER_EFFECTS = new java.util.EnumMap<>(
+            DisasterType.class);
+
+    static {
+        DISASTER_EFFECTS.put(DisasterType.METEOR, DisasterManager::applyMeteorEffect);
+        DISASTER_EFFECTS.put(DisasterType.BLIZZARD, DisasterManager::applyBlizzardEffect);
+        DISASTER_EFFECTS.put(DisasterType.SANDSTORM, DisasterManager::applySandstormEffect);
+        DISASTER_EFFECTS.put(DisasterType.SPORE, DisasterManager::applySporeEffect);
+        DISASTER_EFFECTS.put(DisasterType.CRYSTAL_STORM, DisasterManager::applyCrystalStormEffect);
+        DISASTER_EFFECTS.put(DisasterType.FIRE_SHOWER, DisasterManager::applyFireShowerEffect);
+        DISASTER_EFFECTS.put(DisasterType.ICE_SPIKES, DisasterManager::applyIceSpikesEffect);
+        DISASTER_EFFECTS.put(DisasterType.MIRAGE, DisasterManager::applyMirageEffect);
+    }
 
     // State management
     private static int tickCounter = 0;
@@ -367,6 +376,29 @@ public final class DisasterManager {
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.LEVITATION,
                 ConfigManager.getDisasterEffectDurationTicks(),
+                0));
+    }
+
+    private static void applyFireShowerEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Ignite the player for a short time and deal a bit of fire damage
+        player.setOnFireFor(Math.max(1, ConfigManager.getDisasterEffectDurationTicks() / 20));
+        player.damage(server.getOverworld().getDamageSources().onFire(),
+                Math.max(1.0F, ConfigManager.getDisasterMeteorDamage() / 2.0F));
+    }
+
+    private static void applyIceSpikesEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Slow the player using slowness effect for the disaster duration
+        player.addStatusEffect(new StatusEffectInstance(
+                StatusEffects.SLOWNESS,
+                ConfigManager.getDisasterEffectDurationTicks(),
+                1)); // Slowness II for stronger slowdown
+    }
+
+    private static void applyMirageEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Cause nausea to disorient players briefly
+        player.addStatusEffect(new StatusEffectInstance(
+                StatusEffects.NAUSEA,
+                Math.min(ConfigManager.getDisasterEffectDurationTicks(), 200),
                 0));
     }
 
