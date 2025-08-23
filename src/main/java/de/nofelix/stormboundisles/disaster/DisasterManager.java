@@ -32,7 +32,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * Disasters are selected based on island type and configured intervals,
  * applying specific effects to players within affected zones. The system
  * prevents duplicate disasters and automatically manages disaster lifecycles.
- * 
+ * private static void checkExpiredDisasters(@NotNull MinecraftServer server) {
  * Example usage:
  * ```java
  * // Trigger a specific disaster
@@ -78,6 +78,7 @@ public final class DisasterManager {
     private static final Set<String> activeDisasters = new HashSet<>();
     private static final Object2LongMap<String> disasterExpirationTimes = new Object2LongOpenHashMap<>();
     private static final Object2LongMap<String> lastPulseTimes = new Object2LongOpenHashMap<>();
+    private static final Object2LongMap<String> lastActionbarTimes = new Object2LongOpenHashMap<>();
 
     private DisasterManager() {
     }
@@ -140,6 +141,10 @@ public final class DisasterManager {
         broadcastDisasterAlert(server, islandId, type);
         applyDisasterToPlayersOnIsland(server, island, type);
 
+        // Record initial pulse and actionbar times
+        lastPulseTimes.put(disasterKey, System.currentTimeMillis());
+        lastActionbarTimes.put(disasterKey, System.currentTimeMillis());
+
         return true;
     }
 
@@ -174,8 +179,8 @@ public final class DisasterManager {
         removeDisasters(disastersToRemove);
 
         // Notify players and broadcast
-        notifyPlayersOfDisasterCancellation(server, island, islandId);
-        broadcastDisasterCancellation(server, islandId);
+        notifyPlayersOfDisasterSubsided(server, island, islandId);
+        broadcastDisasterSubsided(server, islandId);
 
         LOGGER.info("Cancelled {} disasters on island: {}", disastersToRemove.size(), islandId);
         return true;
@@ -297,10 +302,7 @@ public final class DisasterManager {
         }
     }
 
-    /**
-     * Notifies players on an island that disasters have been cancelled.
-     */
-    private static void notifyPlayersOfDisasterCancellation(@NotNull MinecraftServer server,
+    private static void notifyPlayersOfDisasterSubsided(@NotNull MinecraftServer server,
             @NotNull Island island, @NotNull String islandId) {
         if (island.getZone() == null) {
             return;
@@ -322,11 +324,8 @@ public final class DisasterManager {
         server.getPlayerManager().broadcast(message, false);
     }
 
-    /**
-     * Sends a disaster cancellation message to all players.
-     */
-    private static void broadcastDisasterCancellation(@NotNull MinecraftServer server, @NotNull String islandId) {
-        Text message = Text.literal("The disaster on " + islandId + " has been cancelled.").formatted(Formatting.GREEN);
+    private static void broadcastDisasterSubsided(@NotNull MinecraftServer server, @NotNull String islandId) {
+        Text message = Text.literal("The disaster on " + islandId + " has subsided.").formatted(Formatting.GREEN);
         server.getPlayerManager().broadcast(message, false);
     }
 
@@ -353,31 +352,75 @@ public final class DisasterManager {
     // Disaster effect implementations
 
     private static void applyMeteorEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
-        player.damage(server.getOverworld().getDamageSources().generic(),
-                ConfigManager.getDisasterMeteorDamage());
+        // Randomize meteor hits so they don't always one-shot:
+        // - 60% base chance to hit
+        // - damage is between 50% and 100% of the configured cap
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        double hitChance = 0.6;
+        if (rnd.nextDouble() < hitChance) {
+            float cap = Math.min(ConfigManager.getDisasterMeteorDamage(), 12.0F);
+            float factor = (float) (0.5 + rnd.nextDouble() * 0.5); // 0.5..1.0
+            float damage = Math.max(1.0F, cap * factor);
+            player.damage(server.getOverworld().getDamageSources().generic(), damage);
+        } else {
+            // Missed meteor — no damage applied
+        }
     }
 
     private static void applyBlizzardEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
-        player.setFrozenTicks(player.getFrozenTicks() + ConfigManager.getDisasterBlizzardFreezeTicks());
+        // Increase blizzard duration so the effect is more impactful but still bounded.
+        // Add up to +20s per application and allow extending if remaining freeze is
+        // lowish.
+        int add = Math.min(ConfigManager.getDisasterBlizzardFreezeTicks(), 20 * 20); // max +20s per apply
+        if (player.getFrozenTicks() <= 20 * 10) { // extend if remaining freeze <= 10s
+            int total = Math.min(player.getFrozenTicks() + add, 20 * 40); // total capped at 40s
+            player.setFrozenTicks(total);
+        }
     }
 
     private static void applySandstormEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Apply blindness but avoid reapplying aggressively to prevent continuous
+        // blindness
+        int applyTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 6); // max 6s per application
+        StatusEffectInstance existing = player.getStatusEffect(StatusEffects.BLINDNESS);
+        if (existing != null && existing.getDuration() > (applyTicks / 2)) {
+            return;
+        }
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.BLINDNESS,
-                ConfigManager.getDisasterEffectDurationTicks(),
+                applyTicks,
                 ConfigManager.getDisasterSandstormBlindAmplifier()));
     }
 
     private static void applySporeEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Apply poison conservatively. Shorten or skip if the player is low on health
+        int applyTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 6); // max 6s
+        StatusEffectInstance existing = player.getStatusEffect(StatusEffects.POISON);
+        if (existing != null && existing.getDuration() > (applyTicks / 2)) {
+            return;
+        }
+
+        // If the player is already low on health, reduce duration to avoid sudden
+        // deaths
+        float health = player.getHealth();
+        if (health <= 4.0F) { // <= 2 hearts
+            applyTicks = Math.max(20, applyTicks / 2);
+        }
+
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.POISON,
-                ConfigManager.getDisasterEffectDurationTicks(),
+                applyTicks,
                 ConfigManager.getDisasterSporePoisonAmplifier()));
     }
 
     private static void applyCrystalStormEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
         // Cap levitation to 10 seconds to avoid fatal launches
-        int levitationTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 10);
+        int levitationTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 7);
+        StatusEffectInstance existing = player.getStatusEffect(StatusEffects.LEVITATION);
+        if (existing != null) {
+            return;
+        }
+
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.LEVITATION,
                 levitationTicks,
@@ -385,37 +428,48 @@ public final class DisasterManager {
     }
 
     private static void applyFireShowerEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
-        // Ignite the player for a short time and deal a bit of fire damage
-        // Cap ignition to 10 seconds for survivability
-        int raw = ConfigManager.getDisasterEffectDurationTicks() / 20;
-        int igniteSeconds;
-        if (raw < 1) {
-            igniteSeconds = 1;
-        } else if (raw > 10) {
-            igniteSeconds = 10;
-        } else {
-            igniteSeconds = raw;
+        if (!player.hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
+            int raw = ConfigManager.getDisasterEffectDurationTicks() / 20;
+            int igniteSeconds = Math.clamp(raw, 1, 3); // 1..3 seconds to allow recovery
+            int currentFireTicks = player.getFireTicks();
+            if (currentFireTicks <= 20) { // only ignite if not already burning significantly
+                player.setOnFireFor(igniteSeconds);
+            }
         }
-        player.setOnFireFor(igniteSeconds);
-        player.damage(server.getOverworld().getDamageSources().onFire(),
-                Math.max(1.0F, ConfigManager.getDisasterFireShowerDamage()));
+
+        // Apply reduced damage so players can heal between pulses
+        float damage = Math.max(1.0F, ConfigManager.getDisasterFireShowerDamage() * 0.4F);
+        player.damage(server.getOverworld().getDamageSources().onFire(), damage);
     }
 
     private static void applyIceSpikesEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
-        // Slow the player using slowness effect for the disaster duration
+        // Apply slowness conservatively and avoid stacking too aggressively
+        int applyTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 6); // max 6s
+        StatusEffectInstance existing = player.getStatusEffect(StatusEffects.SLOWNESS);
+        if (existing != null && existing.getDuration() > (applyTicks / 2)) {
+            return;
+        }
+
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.SLOWNESS,
-                ConfigManager.getDisasterEffectDurationTicks(),
+                applyTicks,
                 ConfigManager.getDisasterIceSpikesSlowAmplifier()));
     }
 
     private static void applyMirageEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
-        // Cause nausea to disorient players briefly
-        player.addStatusEffect(new StatusEffectInstance(
-                StatusEffects.NAUSEA,
-                Math.min(ConfigManager.getDisasterEffectDurationTicks(),
-                        ConfigManager.getDisasterMirageDurationCapTicks()),
-                0));
+        int desired = Math.min(ConfigManager.getDisasterEffectDurationTicks(),
+                ConfigManager.getDisasterMirageDurationCapTicks());
+        int cap = 20 * 6; // 6 seconds max per application to avoid long disorientation
+        int applyTicks = Math.min(desired, cap);
+
+        StatusEffectInstance existing = player.getStatusEffect(StatusEffects.NAUSEA);
+        if (existing != null && existing.getDuration() > (applyTicks / 2)) {
+            // If player already has nausea for more than half of the configured duration,
+            // skip reapplying to avoid stacking long dizziness
+            return;
+        }
+
+        player.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, applyTicks, 0));
     }
 
     // Server tick handling
@@ -425,12 +479,13 @@ public final class DisasterManager {
      * Performs disaster lifecycle management and random disaster triggering.
      */
     private static void onServerTick(@NotNull MinecraftServer server) {
-        // Check for expired disasters
-        checkExpiredDisasters();
+        // Check for expired disasters and notify players
+        checkExpiredDisasters(server);
 
         // Reapply pulses for active disasters if pulse interval elapsed
         long now = System.currentTimeMillis();
         long pulseIntervalMs = ConfigManager.getDisasterPulseIntervalTicks() * MILLISECONDS_PER_TICK;
+        long actionbarIntervalMs = ConfigManager.getDisasterActionbarIntervalTicks() * MILLISECONDS_PER_TICK;
         for (String key : new HashSet<>(activeDisasters)) {
             long last = lastPulseTimes.getLong(key);
             if (last == 0L) {
@@ -452,6 +507,27 @@ public final class DisasterManager {
                 }
                 lastPulseTimes.put(key, now);
             }
+
+            // Resend actionbar separately and more frequently if configured
+            long lastAction = lastActionbarTimes.getLong(key);
+            if (lastAction == 0L) {
+                lastActionbarTimes.put(key, now);
+            } else if (now - lastAction >= actionbarIntervalMs) {
+                String[] parts = key.split(DISASTER_KEY_SEPARATOR);
+                if (parts.length == 2) {
+                    String islandId = parts[0];
+                    Island island = DataManager.getIsland(islandId);
+                    if (island != null && island.getZone() != null) {
+                        // Notify players again via actionbar
+                        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                            if (island.getZone().contains(player.getBlockPos())) {
+                                ActionbarNotifier.send(player, "§cDisaster: " + parts[1] + "!");
+                            }
+                        }
+                    }
+                }
+                lastActionbarTimes.put(key, now);
+            }
         }
 
         // Periodic random disaster triggering
@@ -463,9 +539,10 @@ public final class DisasterManager {
     }
 
     /**
-     * Removes any disasters that have passed their expiration time.
+     * Removes any disasters that have passed their expiration time and notifies
+     * players.
      */
-    private static void checkExpiredDisasters() {
+    private static void checkExpiredDisasters(@NotNull MinecraftServer server) {
         long currentTime = System.currentTimeMillis();
         Set<String> expiredKeys = new HashSet<>();
 
@@ -475,11 +552,33 @@ public final class DisasterManager {
             }
         }
 
-        if (!expiredKeys.isEmpty()) {
-            removeDisasters(expiredKeys);
-            for (String key : expiredKeys) {
-                LOGGER.debug("Disaster expired: {}", key);
+        if (expiredKeys.isEmpty()) {
+            return;
+        }
+
+        // Notify players and broadcast cancellations for each expired disaster
+        for (String key : expiredKeys) {
+            try {
+                String[] parts = key.split(DISASTER_KEY_SEPARATOR);
+                if (parts.length == 2) {
+                    String islandId = parts[0];
+                    Island island = DataManager.getIsland(islandId);
+                    if (island != null && island.getZone() != null) {
+                        notifyPlayersOfDisasterSubsided(server, island, islandId);
+                        broadcastDisasterSubsided(server, islandId);
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Failed to notify about expired disaster {}: {}", key, e.getMessage());
             }
+        }
+
+        // Centralized removal will clean activeDisasters, expiration times and pulse
+        // times
+        removeDisasters(expiredKeys);
+
+        for (String key : expiredKeys) {
+            LOGGER.debug("Disaster expired: {}", key);
         }
     }
 

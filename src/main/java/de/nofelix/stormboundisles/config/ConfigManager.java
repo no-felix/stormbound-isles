@@ -52,8 +52,9 @@ public final class ConfigManager {
         static final int SCOREBOARD_UPDATE_INTERVAL = 20; // 1 second
         static final int DISASTER_INTERVAL_TICKS = 20 * 60 * 5; // 5 minutes
         static final int DISASTER_EFFECT_DURATION_TICKS = 20 * 30; // 600 ticks
-        static final int DISASTER_COOLDOWN_TICKS = 20 * 60 * 3; // 3600 ticks
-        static final int DISASTER_PULSE_INTERVAL_TICKS = 20 * 25; // 500 ticks
+        static final int DISASTER_COOLDOWN_TICKS = 20 * 60 * 1; // 1200 ticks (1 minute)
+        static final int DISASTER_PULSE_INTERVAL_TICKS = 20 * 5; // 100 ticks (5 seconds)
+        static final int DISASTER_ACTIONBAR_INTERVAL_TICKS = 20 * 1; // 1 second
         static final float METEOR_DAMAGE = 8.0F;
         static final int BLIZZARD_FREEZE_TICKS = 20 * 20; // 400 ticks
         static final float FIRE_SHOWER_DAMAGE = 4.0F;
@@ -188,6 +189,8 @@ public final class ConfigManager {
                 config.disaster.crystalStormLevitationAmplifier);
         LOGGER.info("    Disaster pulse interval {}t",
                 config.disaster.disasterPulseIntervalTicks);
+        LOGGER.info("    Disaster actionbar interval {}t",
+                config.disaster.disasterActionbarIntervalTicks);
     }
 
     /**
@@ -295,9 +298,7 @@ public final class ConfigManager {
 
     private static boolean validateDisasterSettings() {
         boolean corrected = false;
-        if (config.disaster.disasterIntervalTicks <= 0 || config.disaster.disasterIntervalTicks > 20 * 60 * 60) { // Max
-                                                                                                                  // 1
-                                                                                                                  // hour
+        if (config.disaster.disasterIntervalTicks <= 0 || config.disaster.disasterIntervalTicks > 20 * 60 * 60) {
             config.disaster.disasterIntervalTicks = Defaults.DISASTER_INTERVAL_TICKS;
             LOGGER.warn("Invalid disasterIntervalTicks, reset to default: {}", config.disaster.disasterIntervalTicks);
             corrected = true;
@@ -314,6 +315,14 @@ public final class ConfigManager {
             config.disaster.disasterPulseIntervalTicks = Defaults.DISASTER_PULSE_INTERVAL_TICKS;
             LOGGER.warn("Invalid disasterPulseIntervalTicks, reset to default: {}",
                     config.disaster.disasterPulseIntervalTicks);
+            corrected = true;
+        }
+
+        if (config.disaster.disasterActionbarIntervalTicks <= 0
+                || config.disaster.disasterActionbarIntervalTicks > 20 * 60 * 60) { // Max 1 hour
+            config.disaster.disasterActionbarIntervalTicks = Defaults.DISASTER_ACTIONBAR_INTERVAL_TICKS;
+            LOGGER.warn("Invalid disasterActionbarIntervalTicks, reset to default: {}",
+                    config.disaster.disasterActionbarIntervalTicks);
             corrected = true;
         }
 
@@ -484,6 +493,10 @@ public final class ConfigManager {
         return config.disaster.disasterPulseIntervalTicks;
     }
 
+    public static int getDisasterActionbarIntervalTicks() {
+        return config.disaster.disasterActionbarIntervalTicks;
+    }
+
     // Inner classes
     /**
      * Root class representing the structure of the configuration file.
@@ -614,6 +627,11 @@ public final class ConfigManager {
              * How often (ticks) to reapply disaster effects while the disaster is active.
              */
             int disasterPulseIntervalTicks = Defaults.DISASTER_PULSE_INTERVAL_TICKS;
+            /**
+             * How often (ticks) to resend the actionbar "Disaster: ..." while active.
+             * Default: 20 ticks (1s)
+             */
+            int disasterActionbarIntervalTicks = Defaults.DISASTER_ACTIONBAR_INTERVAL_TICKS;
         }
     }
 }
