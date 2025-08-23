@@ -44,6 +44,7 @@ public final class ConfigManager {
         static final double BOUNDARY_PUSH_STEP = 1.0;
         static final int BOUNDARY_PUSH_MAX_STEPS = 10;
         static final int DEATH_PENALTY = 10;
+        static final int KILL_REWARD = 5;
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
         static final int BUFF_UPDATE_INTERVAL = 60;
@@ -161,6 +162,8 @@ public final class ConfigManager {
         LOGGER.info("  Player: Boundary check {}t, Death penalty {}, Warning cooldown {}ms",
                 config.player.boundaryCheckInterval, config.player.deathPenalty,
                 config.player.boundaryWarningCooldownMs);
+        LOGGER.info("    Kill reward {}",
+                config.player.killReward);
         LOGGER.info("    Boundary push step {} blocks, max attempts {}",
                 config.player.boundaryPushStep, config.player.boundaryPushMaxSteps);
         LOGGER.info("  Buffs: Update interval {}t, Duration {}t",
@@ -179,7 +182,19 @@ public final class ConfigManager {
     private static void validateAndCorrectConfig() {
         boolean corrected = false;
 
-        // Validate game settings with reasonable bounds
+        corrected |= validateGameSettings();
+        corrected |= validatePlayerSettings();
+        corrected |= validateBuffSettings();
+        corrected |= validateScoreboardSettings();
+        corrected |= validateDisasterSettings();
+
+        if (corrected) {
+            saveConfig();
+        }
+    }
+
+    private static boolean validateGameSettings() {
+        boolean corrected = false;
         if (config.game.buildPhaseTicks <= 0 || config.game.buildPhaseTicks > Integer.MAX_VALUE / 2) {
             config.game.buildPhaseTicks = Defaults.BUILD_PHASE_TICKS;
             LOGGER.warn("Invalid buildPhaseTicks, reset to default: {}", config.game.buildPhaseTicks);
@@ -198,7 +213,11 @@ public final class ConfigManager {
             corrected = true;
         }
 
-        // Validate player settings with reasonable bounds
+        return corrected;
+    }
+
+    private static boolean validatePlayerSettings() {
+        boolean corrected = false;
         if (config.player.boundaryCheckInterval <= 0 || config.player.boundaryCheckInterval > 20 * 60) { // Max 1 minute
             config.player.boundaryCheckInterval = Defaults.BOUNDARY_CHECK_INTERVAL;
             LOGGER.warn("Invalid boundaryCheckInterval, reset to default: {}", config.player.boundaryCheckInterval);
@@ -211,7 +230,12 @@ public final class ConfigManager {
             corrected = true;
         }
 
-        // Validate boundary push settings
+        if (config.player.killReward < 0 || config.player.killReward > 1000) { // Reasonable max
+            config.player.killReward = Defaults.KILL_REWARD;
+            LOGGER.warn("Invalid killReward, reset to default: {}", config.player.killReward);
+            corrected = true;
+        }
+
         if (config.player.boundaryPushStep <= 0.0 || config.player.boundaryPushStep > 100.0) {
             config.player.boundaryPushStep = Defaults.BOUNDARY_PUSH_STEP;
             LOGGER.warn("Invalid boundaryPushStep, reset to default: {}", config.player.boundaryPushStep);
@@ -224,7 +248,11 @@ public final class ConfigManager {
             corrected = true;
         }
 
-        // Validate buff settings
+        return corrected;
+    }
+
+    private static boolean validateBuffSettings() {
+        boolean corrected = false;
         if (config.buff.buffUpdateInterval <= 0 || config.buff.buffUpdateInterval > 20 * 60) { // Max 1 minute
             config.buff.buffUpdateInterval = Defaults.BUFF_UPDATE_INTERVAL;
             LOGGER.warn("Invalid buffUpdateInterval, reset to default: {}", config.buff.buffUpdateInterval);
@@ -237,14 +265,21 @@ public final class ConfigManager {
             corrected = true;
         }
 
-        // Validate scoreboard settings
+        return corrected;
+    }
+
+    private static boolean validateScoreboardSettings() {
+        boolean corrected = false;
         if (config.scoreboard.updateInterval <= 0 || config.scoreboard.updateInterval > 20 * 60) { // Max 1 minute
             config.scoreboard.updateInterval = Defaults.SCOREBOARD_UPDATE_INTERVAL;
             LOGGER.warn("Invalid scoreboard updateInterval, reset to default: {}", config.scoreboard.updateInterval);
             corrected = true;
         }
+        return corrected;
+    }
 
-        // Validate disaster settings
+    private static boolean validateDisasterSettings() {
+        boolean corrected = false;
         if (config.disaster.disasterIntervalTicks <= 0 || config.disaster.disasterIntervalTicks > 20 * 60 * 60) { // Max
                                                                                                                   // 1
                                                                                                                   // hour
@@ -259,9 +294,7 @@ public final class ConfigManager {
             corrected = true;
         }
 
-        if (corrected) {
-            saveConfig();
-        }
+        return corrected;
     }
 
     /**
@@ -305,6 +338,10 @@ public final class ConfigManager {
 
     public static long getPlayerBoundaryWarningCooldownMs() {
         return config.player.boundaryWarningCooldownMs;
+    }
+
+    public static int getPlayerKillReward() {
+        return config.player.killReward;
     }
 
     public static long getPlayerResetConfirmationTimeoutMs() {
@@ -407,6 +444,11 @@ public final class ConfigManager {
             double boundaryPushStep = Defaults.BOUNDARY_PUSH_STEP;
             /** Maximum number of corrective push attempts. */
             int boundaryPushMaxSteps = Defaults.BOUNDARY_PUSH_MAX_STEPS;
+            /**
+             * Points awarded to a team when a member kills a player from a different
+             * island. Default: 5 points.
+             */
+            int killReward = Defaults.KILL_REWARD;
         }
 
         /**
