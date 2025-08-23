@@ -85,7 +85,7 @@ public class ScoreboardTabHandler {
     private static void showScoreboard() {
         if (!scoreboardVisible) {
             scoreboardVisible = true;
-            StormboundIslesMod.LOGGER.debug("TAB pressed - scoreboard should be visible.");
+            StormboundIslesMod.LOGGER.debug("TAB pressed - scoreboard visible.");
         }
     }
 
@@ -96,7 +96,7 @@ public class ScoreboardTabHandler {
     private static void hideScoreboard() {
         if (scoreboardVisible) {
             scoreboardVisible = false;
-            StormboundIslesMod.LOGGER.debug("TAB released - scoreboard should be hidden.");
+            StormboundIslesMod.LOGGER.debug("TAB released - scoreboard hidden.");
         }
     }
 

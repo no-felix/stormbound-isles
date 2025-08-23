@@ -10,9 +10,11 @@ import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.World;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 
@@ -45,6 +47,14 @@ public final class PlayerEventHandler {
 			}
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerEventHandler::onServerTick);
+
+		// Clean up boundary warning timestamps when players disconnect to avoid
+		// unbounded growth of the map.
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			if (handler != null && handler.getPlayer() != null) {
+				lastBoundaryWarning.remove(handler.getPlayer().getUuid());
+			}
+		});
 	}
 
 	/**
@@ -79,25 +89,124 @@ public final class PlayerEventHandler {
 		if (island == null || island.getZone() == null)
 			return;
 
+		ServerWorld world = player.getServerWorld();
+
+		// Don't enforce boundaries in other dimensions
+		if (world.getRegistryKey() != World.OVERWORLD) {
+			StormboundIslesMod.LOGGER.debug("Skipping boundary enforcement for player {} in dimension {}",
+					player.getName().getString(), world.getRegistryKey().getValue());
+			return;
+		}
+
 		BlockPos pos = player.getBlockPos();
 		if (!island.getZone().contains(pos)) {
 			long now = System.currentTimeMillis();
 			Long last = lastBoundaryWarning.get(player.getUuid());
 			if (last == null || (now - last) > ConfigManager.getPlayerBoundaryWarningCooldownMs()) {
-				player.sendMessage(
-						Text.literal("§c⚠ You cannot leave your island during the build phase!"),
-						true);
+				player.sendMessage(Text.literal("§c⚠ You cannot leave your island during the build phase!"), true);
 				lastBoundaryWarning.put(player.getUuid(), now);
+				StormboundIslesMod.LOGGER.debug("Warning sent to player {} for leaving island {}",
+						player.getName().getString(), team.get().getIslandId());
 			}
 
 			if (island.getSpawnY() >= 0) {
-				ServerWorld world = player.getServerWorld();
-				player.teleport(
-						world,
-						island.getSpawnX() + 0.5, island.getSpawnY(), island.getSpawnZ() + 0.5,
-						player.getYaw(), player.getPitch());
+
+				double px = player.getX();
+				double pz = player.getZ();
+				double sx = island.getSpawnX() + 0.5;
+				double sz = island.getSpawnZ() + 0.5;
+				double dx = px - sx;
+				double dz = pz - sz;
+				double len = Math.sqrt(dx * dx + dz * dz);
+
+				final double pushStep = ConfigManager.getPlayerBoundaryPushStep();
+				final int maxSteps = ConfigManager.getPlayerBoundaryPushMaxSteps();
+				boolean moved = false;
+
+				if (len <= 0.0001) {
+					double py = player.getY();
+					player.teleport(world, sx, py, sz, player.getYaw(), player.getPitch());
+					moved = true;
+				} else {
+					for (int i = 1; i <= maxSteps; i++) {
+						double newLen = Math.max(0.0, len - pushStep * i);
+						double nx = sx + (dx / len) * newLen;
+						double nz = sz + (dz / len) * newLen;
+
+						int cx = (int) Math.floor(nx);
+						int cz = (int) Math.floor(nz);
+						int cy = (int) Math.floor(player.getY());
+
+						BlockPos candidate = new BlockPos(cx, cy, cz);
+						if (island.getZone().contains(candidate)) {
+							// Try small vertical adjustments before rejecting candidate
+							double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
+							boolean teleported = false;
+							for (double off : offsets) {
+								double tryY = player.getY() + off;
+								if (isSafeTeleport(world, nx, tryY, nz)) {
+									player.teleport(world, nx, tryY, nz, player.getYaw(), player.getPitch());
+									StormboundIslesMod.LOGGER.debug("Pushed player {} back to {} (island {})",
+											player.getName().getString(), new BlockPos(cx, (int) Math.floor(tryY), cz),
+											team.get().getIslandId());
+									moved = true;
+									teleported = true;
+									break;
+								}
+							}
+							if (teleported)
+								break;
+						}
+					}
+				}
+
+				if (!moved) {
+					// Try fallback spawn teleport if it's safe
+					// Try small vertical adjustments around spawn
+					double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
+					boolean teleported = false;
+					for (double off : offsets) {
+						double tryY = island.getSpawnY() + off;
+						if (isSafeTeleport(world, sx, tryY, sz)) {
+							player.teleport(world, sx, tryY, sz, player.getYaw(), player.getPitch());
+							StormboundIslesMod.LOGGER.debug(
+									"Fallback teleport of player {} to spawn of island {} at {}",
+									player.getName().getString(), team.get().getIslandId(),
+									new BlockPos((int) sx, (int) Math.floor(tryY), (int) sz));
+							teleported = true;
+							break;
+						}
+					}
+					if (!teleported) {
+						StormboundIslesMod.LOGGER.warn(
+								"Could not safely teleport player {} to spawn of island {} (unsafe blocks at destination)",
+								player.getName().getString(), team.get().getIslandId());
+						player.sendMessage(Text.literal(
+								"§cCould not safely teleport you back to your island. Please contact an admin."), true);
+					}
+				}
 			}
 		}
+	}
+
+	private static boolean isSafeTeleport(ServerWorld world, double x, double y, double z) {
+		BlockPos target = new BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+		BlockPos above = target.up();
+		BlockPos below = target.down();
+
+		// Destination and one block above must be air
+		if (!world.getBlockState(target).isAir())
+			return false;
+		if (!world.getBlockState(above).isAir())
+			return false;
+
+		// Block below must exist and not be liquid
+		if (world.getBlockState(below).isAir())
+			return false;
+		if (!world.getFluidState(below).isEmpty())
+			return false;
+
+		return true;
 	}
 
 	/**
