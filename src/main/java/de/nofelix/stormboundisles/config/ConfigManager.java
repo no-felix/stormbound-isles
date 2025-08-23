@@ -48,7 +48,7 @@ public final class ConfigManager {
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
         static final int BUFF_UPDATE_INTERVAL = 60;
-        static final int BUFF_DURATION_TICKS = 80;
+        static final int BUFF_DURATION_TICKS = 20 * 60; // 1 minute
         static final int SCOREBOARD_UPDATE_INTERVAL = 20; // 1 second
         static final int DISASTER_INTERVAL_TICKS = 20 * 60 * 5; // 5 minutes
         static final int DISASTER_EFFECT_DURATION_TICKS = 100;
@@ -460,7 +460,7 @@ public final class ConfigManager {
              * Default: 60 ticks (3 seconds).
              */
             int buffUpdateInterval = Defaults.BUFF_UPDATE_INTERVAL;
-            /** Duration in ticks for island buffs. Default: 80 ticks (4 seconds). */
+            /** Duration in ticks for island buffs. Default: 1200 ticks (1 minute). */
             int buffDurationTicks = Defaults.BUFF_DURATION_TICKS;
         }
 
