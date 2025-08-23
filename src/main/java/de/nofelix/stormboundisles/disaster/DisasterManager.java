@@ -21,7 +21,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +77,7 @@ public final class DisasterManager {
     private static int tickCounter = 0;
     private static final Set<String> activeDisasters = new HashSet<>();
     private static final Object2LongMap<String> disasterExpirationTimes = new Object2LongOpenHashMap<>();
+    private static final Object2LongMap<String> lastPulseTimes = new Object2LongOpenHashMap<>();
 
     private DisasterManager() {
     }
@@ -131,6 +131,8 @@ public final class DisasterManager {
         long expirationTime = calculateExpirationTime();
         activeDisasters.add(disasterKey);
         disasterExpirationTimes.put(disasterKey, expirationTime);
+        // Record initial pulse time so pulsing uses a consistent baseline
+        lastPulseTimes.put(disasterKey, System.currentTimeMillis());
 
         LOGGER.info("Triggering disaster: {} on island: {}", type, islandId);
 
@@ -278,6 +280,7 @@ public final class DisasterManager {
         for (String key : disastersToRemove) {
             activeDisasters.remove(key);
             disasterExpirationTimes.removeLong(key);
+            lastPulseTimes.removeLong(key);
         }
     }
 
@@ -362,28 +365,40 @@ public final class DisasterManager {
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.BLINDNESS,
                 ConfigManager.getDisasterEffectDurationTicks(),
-                0));
+                ConfigManager.getDisasterSandstormBlindAmplifier()));
     }
 
     private static void applySporeEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.POISON,
                 ConfigManager.getDisasterEffectDurationTicks(),
-                0));
+                ConfigManager.getDisasterSporePoisonAmplifier()));
     }
 
     private static void applyCrystalStormEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
+        // Cap levitation to 10 seconds to avoid fatal launches
+        int levitationTicks = Math.min(ConfigManager.getDisasterEffectDurationTicks(), 20 * 10);
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.LEVITATION,
-                ConfigManager.getDisasterEffectDurationTicks(),
-                0));
+                levitationTicks,
+                ConfigManager.getDisasterCrystalStormLevitationAmplifier()));
     }
 
     private static void applyFireShowerEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
         // Ignite the player for a short time and deal a bit of fire damage
-        player.setOnFireFor(Math.max(1, ConfigManager.getDisasterEffectDurationTicks() / 20));
+        // Cap ignition to 10 seconds for survivability
+        int raw = ConfigManager.getDisasterEffectDurationTicks() / 20;
+        int igniteSeconds;
+        if (raw < 1) {
+            igniteSeconds = 1;
+        } else if (raw > 10) {
+            igniteSeconds = 10;
+        } else {
+            igniteSeconds = raw;
+        }
+        player.setOnFireFor(igniteSeconds);
         player.damage(server.getOverworld().getDamageSources().onFire(),
-                Math.max(1.0F, ConfigManager.getDisasterMeteorDamage() / 2.0F));
+                Math.max(1.0F, ConfigManager.getDisasterFireShowerDamage()));
     }
 
     private static void applyIceSpikesEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
@@ -391,14 +406,15 @@ public final class DisasterManager {
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.SLOWNESS,
                 ConfigManager.getDisasterEffectDurationTicks(),
-                1)); // Slowness II for stronger slowdown
+                ConfigManager.getDisasterIceSpikesSlowAmplifier()));
     }
 
     private static void applyMirageEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
         // Cause nausea to disorient players briefly
         player.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.NAUSEA,
-                Math.min(ConfigManager.getDisasterEffectDurationTicks(), 200),
+                Math.min(ConfigManager.getDisasterEffectDurationTicks(),
+                        ConfigManager.getDisasterMirageDurationCapTicks()),
                 0));
     }
 
@@ -411,6 +427,32 @@ public final class DisasterManager {
     private static void onServerTick(@NotNull MinecraftServer server) {
         // Check for expired disasters
         checkExpiredDisasters();
+
+        // Reapply pulses for active disasters if pulse interval elapsed
+        long now = System.currentTimeMillis();
+        long pulseIntervalMs = ConfigManager.getDisasterPulseIntervalTicks() * MILLISECONDS_PER_TICK;
+        for (String key : new HashSet<>(activeDisasters)) {
+            long last = lastPulseTimes.getLong(key);
+            if (last == 0L) {
+                // First pulse was applied at trigger time; record now
+                lastPulseTimes.put(key, now);
+                continue;
+            }
+
+            if (now - last >= pulseIntervalMs) {
+                // Reapply the disaster effect to players on the island
+                String[] parts = key.split(DISASTER_KEY_SEPARATOR);
+                if (parts.length == 2) {
+                    String islandId = parts[0];
+                    DisasterType type = DisasterType.valueOf(parts[1]);
+                    Island island = DataManager.getIsland(islandId);
+                    if (island != null && island.getZone() != null) {
+                        applyDisasterToPlayersOnIsland(server, island, type);
+                    }
+                }
+                lastPulseTimes.put(key, now);
+            }
+        }
 
         // Periodic random disaster triggering
         tickCounter++;
@@ -425,15 +467,17 @@ public final class DisasterManager {
      */
     private static void checkExpiredDisasters() {
         long currentTime = System.currentTimeMillis();
-        Iterator<Object2LongMap.Entry<String>> iterator = disasterExpirationTimes.object2LongEntrySet().iterator();
+        Set<String> expiredKeys = new HashSet<>();
 
-        while (iterator.hasNext()) {
-            Object2LongMap.Entry<String> entry = iterator.next();
+        for (Object2LongMap.Entry<String> entry : disasterExpirationTimes.object2LongEntrySet()) {
             if (currentTime > entry.getLongValue()) {
-                String key = entry.getKey();
-                activeDisasters.remove(key);
-                iterator.remove(); // Safe removal during iteration
+                expiredKeys.add(entry.getKey());
+            }
+        }
 
+        if (!expiredKeys.isEmpty()) {
+            removeDisasters(expiredKeys);
+            for (String key : expiredKeys) {
                 LOGGER.debug("Disaster expired: {}", key);
             }
         }
