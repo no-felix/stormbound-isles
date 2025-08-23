@@ -54,7 +54,7 @@ public class Constants {
 	/** Name of the main scoreboard objective for team points */
 	public static final String SCOREBOARD_OBJECTIVE_NAME = "sbi_points";
 	/** Display title for the scoreboard */
-	public static final String SCOREBOARD_TITLE = "§b§lStormbound Isles";
+	public static final String SCOREBOARD_TITLE = "§6§lStormbound Isles";
 
 	// Command Constants
 	/**
