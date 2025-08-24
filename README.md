@@ -6,7 +6,7 @@
   **A competitive multiplayer Minecraft mod featuring elemental islands, strategic gameplay, and dynamic disasters**
   
   [![Fabric](https://img.shields.io/badge/Fabric-1.21.1-green.svg)](https://fabricmc.net/)
-  [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
+  [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://openjdk.org/)
   [![License](https://img.shields.io/github/license/no-felix/stormbound-isles)](LICENSE)
   
   [🌐 Project Website](https://no-felix.github.io/stormbound-isles-nextjs/) • [📖 Documentation](https://github.com/no-felix/stormbound-isles-nextjs)
@@ -82,7 +82,7 @@ The mod features a hierarchical permission system with three levels:
 ### Prerequisites
 - Minecraft 1.21.1
 - Fabric Loader
-- Java 21+
+- Java 17+
 
 ### Installation
 1. Download the latest release

@@ -430,7 +430,7 @@ public final class DisasterManager {
     private static void applyFireShowerEffect(@NotNull ServerPlayerEntity player, @NotNull MinecraftServer server) {
         if (!player.hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
             int raw = ConfigManager.getDisasterEffectDurationTicks() / 20;
-            int igniteSeconds = Math.clamp(raw, 1, 3); // 1..3 seconds to allow recovery
+            int igniteSeconds = Math.max(1, Math.min(3, raw)); // 1..3 seconds to allow recovery
             int currentFireTicks = player.getFireTicks();
             if (currentFireTicks <= 20) { // only ignite if not already burning significantly
                 player.setOnFireFor(igniteSeconds);

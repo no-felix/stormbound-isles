@@ -58,11 +58,13 @@ public class IslandCommands implements CommandCategory {
                                 .executes(ctx -> {
                                         StringBuilder sb = new StringBuilder("§6Islands:§r\n");
                                         for (Island isl : DataManager.getIslands().values()) {
-                                                String zoneInfo = switch (isl.getZone()) {
-                                                        case null -> "§cNot set§r";
-                                                        case Zone zone ->
-                                                                "§aPolygon (" + zone.getPoints().size() + " points)§r";
-                                                };
+                                                String zoneInfo;
+                                                Zone z = isl.getZone();
+                                                if (z == null) {
+                                                        zoneInfo = "§cNot set§r";
+                                                } else {
+                                                        zoneInfo = "§aPolygon (" + z.getPoints().size() + " points)§r";
+                                                }
                                                 sb.append("§b").append(isl.getId())
                                                                 .append("§r (§e").append(isl.getType()).append("§r)")
                                                                 .append(" | Team: §d").append(isl.getTeamName())
