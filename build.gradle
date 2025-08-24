@@ -51,9 +51,7 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.3'
-	
-	// Reflections library for annotation scanning
-	implementation 'org.reflections:reflections:0.10.2'
+
 }
 
 processResources {
