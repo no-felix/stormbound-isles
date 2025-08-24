@@ -262,7 +262,7 @@ public final class Zone {
 
         // Calculate projection parameter
         double t = ((pointX - lineX1) * (lineX2 - lineX1) + (pointZ - lineZ1) * (lineZ2 - lineZ1)) / lineLength;
-        t = Math.clamp(t, 0.0, 1.0); // Clamp to line segment
+        t = Math.max(0.0, Math.min(1.0, t)); // Clamp to line segment
 
         // Calculate projection point
         double projectionX = lineX1 + t * (lineX2 - lineX1);
