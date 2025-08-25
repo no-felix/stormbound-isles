@@ -1,7 +1,7 @@
 # Stormbound Isles
 
 <div align="center">
-  <img src="src/main/resources/assets/stormbound-isles/icon.png" alt="Stormbound Isles" width="128" height="128">
+  <img src="src/main/resources/icon.png" alt="Stormbound Isles" width="128" height="128">
   
   **A competitive multiplayer Minecraft mod featuring elemental islands, strategic gameplay, and dynamic disasters**
   
