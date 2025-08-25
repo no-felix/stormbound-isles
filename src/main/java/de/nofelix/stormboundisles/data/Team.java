@@ -88,8 +88,8 @@ public final class Team {
 
     /**
      * Gets the points accumulated by this team.
-     * 
-     * @return The team's points (always non-negative)
+    *
+    * @return The team's points (may be negative)
      */
     public int getPoints() {
         return points;
@@ -185,26 +185,22 @@ public final class Team {
 
     /**
      * Sets the points for this team.
-     * 
-     * @param points The new point value (must be non-negative)
-     * @throws IllegalArgumentException if points is negative
+     *
+     * @param points The new point value (may be negative)
      */
     public void setPoints(int points) {
-        if (points < 0) {
-            throw new IllegalArgumentException("Points cannot be negative");
-        }
         this.points = points;
     }
 
     /**
      * Adds points to this team's score.
-     * The resulting score will never go below zero.
-     * 
+     * The resulting score may be negative.
+     *
      * @param pointsToAdd The number of points to add (can be negative to subtract)
      * @return The new points total
      */
     public int addPoints(int pointsToAdd) {
-        this.points = Math.max(0, this.points + pointsToAdd);
+        this.points = this.points + pointsToAdd;
         return this.points;
     }
 
