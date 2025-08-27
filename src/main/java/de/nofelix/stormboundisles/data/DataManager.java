@@ -64,7 +64,11 @@ public final class DataManager {
     private static final Map<String, Team> teams = new ConcurrentHashMap<>();
     private static final Map<String, Island> islands = new ConcurrentHashMap<>();
 
+    /**
+     * Private constructor to prevent instantiation.
+     */
     private DataManager() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
     // Initialization methods
@@ -73,7 +77,7 @@ public final class DataManager {
      * Initializes the DataManager and loads all persistent data.
      * This method is automatically called during mod initialization.
      */
-    @Initialize(priority = 2000)
+    @Initialize(priority = 2000, description = "Initialize data management and load persistent data")
     public static void initialize() {
         LOGGER.info("Initializing DataManager...");
         loadAll();

@@ -67,7 +67,11 @@ public final class ConfigManager {
 
     private static Config config;
 
+    /**
+     * Private constructor to prevent instantiation.
+     */
     private ConfigManager() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
     // Initialization methods
@@ -76,7 +80,7 @@ public final class ConfigManager {
      * If the file is missing or corrupted, it creates a default configuration
      * file and uses the default values.
      */
-    @Initialize(priority = 2500)
+    @Initialize(priority = 2500, description = "Load configuration from JSON file")
     public static void loadConfig() {
         File configFile = FabricLoader.getInstance()
                 .getConfigDir()

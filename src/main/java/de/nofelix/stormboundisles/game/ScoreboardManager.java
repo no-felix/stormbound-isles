@@ -34,13 +34,15 @@ import java.util.UUID;
  * @see DataManager
  * @see Team
  */
-public class ScoreboardManager {
+public final class ScoreboardManager {
 	// Static state
 	private static Scoreboard scoreboard;
 	private static ScoreboardObjective objective;
 	private static MinecraftServer currentServer;
 
-	// Private constructor to prevent instantiation
+    /**
+	 * Private constructor to prevent instantiation.
+	 */
 	private ScoreboardManager() {
 		throw new UnsupportedOperationException("Utility class");
 	}
@@ -163,8 +165,8 @@ public class ScoreboardManager {
 		}
 	}
 
-	/**
-	 * Utility methods for scoreboard management
+	/*
+	  Utility methods for scoreboard management
 	 */
 
 	/**
@@ -188,8 +190,8 @@ public class ScoreboardManager {
 		}
 	}
 
-	/**
-	 * Score management methods
+	/*
+	  Score management methods
 	 */
 
 	/**
@@ -241,8 +243,8 @@ public class ScoreboardManager {
 								teamName));
 	}
 
-	/**
-	 * Team management methods
+	/*
+	  Team management methods
 	 */
 
 	/**
@@ -302,8 +304,8 @@ public class ScoreboardManager {
 		sbTeam.setShowFriendlyInvisibles(true);
 	}
 
-	/**
-	 * Player assignment methods
+	/*
+	  Player assignment methods
 	 */
 
 	/**
@@ -399,8 +401,8 @@ public class ScoreboardManager {
 		}
 	}
 
-	/**
-	 * Public API for external team updates
+	/*
+	  Public API for external team updates
 	 */
 
 	/**
@@ -456,8 +458,8 @@ public class ScoreboardManager {
 		});
 	}
 
-	/**
-	 * Utility methods
+	/*
+	  Utility methods
 	 */
 
 	/**

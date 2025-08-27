@@ -8,6 +8,7 @@ import de.nofelix.stormboundisles.data.Team;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
+import de.nofelix.stormboundisles.init.Initialize;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -35,7 +36,11 @@ public final class PlayerEventHandler {
 	private static int boundaryCheckCounter = 0;
 	private static final Map<UUID, Long> lastBoundaryWarning = new HashMap<>();
 
+	/**
+	 * Private constructor to prevent instantiation.
+	 */
 	private PlayerEventHandler() {
+		throw new UnsupportedOperationException("Utility class");
 	}
 
 	private static Formatting getTeamColor(Team team) {
@@ -53,6 +58,7 @@ public final class PlayerEventHandler {
 	/**
 	 * Registers death and tick listeners.
 	 */
+	@Initialize(priority = 1400, description = "Register player event handler")
 	public static void register() {
 		StormboundIslesMod.LOGGER.info("Registering PlayerEventHandler");
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, src) -> {
