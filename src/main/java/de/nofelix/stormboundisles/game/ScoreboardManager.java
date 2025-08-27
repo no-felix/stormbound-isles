@@ -16,10 +16,6 @@ import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket;
-import net.minecraft.network.packet.s2c.play.ScoreboardDisplayS2CPacket;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
@@ -47,9 +43,6 @@ public final class ScoreboardManager {
 	private static Scoreboard scoreboard;
 	private static ScoreboardObjective objective;
 	private static MinecraftServer currentServer;
-
-	// Track players who need a follow-up scoreboard sync (retry next tick)
-	private static final Set<java.util.UUID> pendingScoreboardSync = ConcurrentHashMap.newKeySet();
 
 	/**
 	 * Private constructor to prevent instantiation.
@@ -108,20 +101,8 @@ public final class ScoreboardManager {
 					int sidebarId = Scoreboard.getDisplaySlotId("sidebar");
 					server.getScoreboard().setObjectiveSlot(sidebarId, objective);
 
-					// Explicitly send objective and display packets to the joining player to force
-					// a client-side sync
-					try {
-						if (player != null && player.networkHandler != null) {
-							// constructor is (ScoreboardObjective, int)
-							player.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, 0));
-							player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(sidebarId, objective));
-							// Ensure we retry once on the next tick in case the client wasn't ready yet
-							pendingScoreboardSync.add(player.getUuid());
-						}
-					} catch (Exception ex) {
-						StormboundIslesMod.LOGGER.warn(
-								"Failed to send explicit scoreboard packets to joining player: {}", ex.toString());
-					}
+					// The scoreboard will automatically sync to the client when they join
+					// No need to send explicit packets which can cause "already exists" errors
 				}
 			} catch (Exception e) {
 				StormboundIslesMod.LOGGER.warn("Failed to sync scoreboard objective to joining player: {}",
@@ -134,34 +115,7 @@ public final class ScoreboardManager {
 			removePlayerFromTeams(handler.player);
 		});
 
-		// Retry sending scoreboard packets at the start of the next server tick for
-		// newly-joined players
-		ServerTickEvents.START_SERVER_TICK.register(server -> {
-			if (pendingScoreboardSync.isEmpty())
-				return;
-			try {
-				for (java.util.UUID uuid : pendingScoreboardSync.toArray(new java.util.UUID[0])) {
-					ServerPlayerEntity p = server.getPlayerManager().getPlayer(uuid);
-					if (p == null || p.networkHandler == null) {
-						// player not present (left quickly) - remove from pending
-						pendingScoreboardSync.remove(uuid);
-						continue;
-					}
-					try {
-						int sidebarId = Scoreboard.getDisplaySlotId("sidebar");
-						p.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, 0));
-						p.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(sidebarId, objective));
-					} catch (Exception ex) {
-						StormboundIslesMod.LOGGER.warn("Retry failed to send scoreboard packets to {}: {}",
-								p.getGameProfile().getName(), ex.toString());
-					}
-					pendingScoreboardSync.remove(uuid);
-				}
-			} catch (Exception e) {
-				StormboundIslesMod.LOGGER.warn("Error during scoreboard sync retry tick: {}", e.toString());
-			}
-		});
-
+		// No need for retry mechanism since we're not sending explicit packets
 		StormboundIslesMod.LOGGER.info("ScoreboardManager event listeners registered.");
 	}
 
