@@ -17,14 +17,14 @@ import org.jetbrains.annotations.Nullable;
  * ```
  */
 public final class Island {
-    
+
     // Constants for validation
     private static final int UNDEFINED_SPAWN_Y = -1;
-    
+
     // Core properties (immutable)
     @NotNull
     private final String id;
-    
+
     // Mutable properties
     @NotNull
     private IslandType type;
@@ -32,7 +32,7 @@ public final class Island {
     private Zone zone;
     @Nullable
     private String teamName;
-    
+
     // Spawn point coordinates
     private int spawnX = 0;
     private int spawnY = UNDEFINED_SPAWN_Y;
@@ -48,13 +48,65 @@ public final class Island {
     public Island(@NotNull String id, @NotNull IslandType type) {
         validateId(id);
         validateType(type);
-        
+
         this.id = id;
         this.type = type;
     }
 
+    // State check methods
+
+    /**
+     * Checks if this island has a defined spawn point.
+     *
+     * @return true if a spawn point is defined (Y >= 0), false otherwise
+     */
+    public boolean hasSpawnPoint() {
+        return spawnY >= 0;
+    }
+
+    /**
+     * Checks if this island has a defined zone.
+     *
+     * @return true if a zone is assigned, false otherwise
+     */
+    public boolean hasZone() {
+        return zone != null;
+    }
+
+    /**
+     * Checks if this island has a team assigned to it.
+     *
+     * @return true if a team is assigned, false otherwise
+     */
+    public boolean hasTeam() {
+        return teamName != null && !teamName.trim().isEmpty();
+    }
+
+    /**
+     * Checks if this island is unassigned (no team).
+     *
+     * @return true if no team is assigned, false otherwise
+     */
+    public boolean isUnassigned() {
+        return !hasTeam();
+    }
+
+    // Private validation methods
+
+    private static void validateId(@Nullable String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("Island ID cannot be null or empty");
+        }
+    }
+
+    private static void validateType(@Nullable IslandType type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Island type cannot be null");
+        }
+    }
+
     // Getters
-    
+
     /**
      * Gets the island's unique identifier.
      *
@@ -124,7 +176,7 @@ public final class Island {
     }
 
     // Setters with validation
-    
+
     /**
      * Sets the island's type.
      *
@@ -176,60 +228,8 @@ public final class Island {
         this.spawnZ = 0;
     }
 
-    // State check methods
-    
-    /**
-     * Checks if this island has a defined spawn point.
-     *
-     * @return true if a spawn point is defined (Y >= 0), false otherwise
-     */
-    public boolean hasSpawnPoint() {
-        return spawnY >= 0;
-    }
-
-    /**
-     * Checks if this island has a defined zone.
-     *
-     * @return true if a zone is assigned, false otherwise
-     */
-    public boolean hasZone() {
-        return zone != null;
-    }
-
-    /**
-     * Checks if this island has a team assigned to it.
-     *
-     * @return true if a team is assigned, false otherwise
-     */
-    public boolean hasTeam() {
-        return teamName != null && !teamName.trim().isEmpty();
-    }
-
-    /**
-     * Checks if this island is unassigned (no team).
-     *
-     * @return true if no team is assigned, false otherwise
-     */
-    public boolean isUnassigned() {
-        return !hasTeam();
-    }
-
-    // Private validation methods
-    
-    private static void validateId(@Nullable String id) {
-        if (id == null || id.trim().isEmpty()) {
-            throw new IllegalArgumentException("Island ID cannot be null or empty");
-        }
-    }
-
-    private static void validateType(@Nullable IslandType type) {
-        if (type == null) {
-            throw new IllegalArgumentException("Island type cannot be null");
-        }
-    }
-
     // Object methods
-    
+
     @Override
     public boolean equals(Object obj) {
         return obj instanceof Island other && id.equals(other.id);
@@ -247,7 +247,6 @@ public final class Island {
                 type,
                 zone != null ? zone : "none",
                 teamName != null ? teamName : "unassigned",
-                hasSpawnPoint() ? "(%d,%d,%d)".formatted(spawnX, spawnY, spawnZ) : "undefined"
-        );
+                hasSpawnPoint() ? "(%d,%d,%d)".formatted(spawnX, spawnY, spawnZ) : "undefined");
     }
 }
