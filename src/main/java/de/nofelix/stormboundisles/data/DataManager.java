@@ -500,7 +500,7 @@ public final class DataManager {
      */
     private static void saveGameState(@NotNull Path dataDir) {
         Path gameStatePath = dataDir.resolve(GAME_STATE_FILENAME);
-        GameState gameState = new GameState(GameManager.phase, GameManager.getPhaseTicks());
+        GameState gameState = new GameState(GameManager.getPhase(), GameManager.getPhaseTicks());
 
         writeJsonToFile(gameStatePath, gameState, "game state");
         LOGGER.debug("Saved game state: Phase={}, Ticks={}",
