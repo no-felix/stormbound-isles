@@ -88,8 +88,8 @@ public final class Team {
 
     /**
      * Gets the points accumulated by this team.
-    *
-    * @return The team's points (may be negative)
+     *
+     * @return The team's points (may be negative)
      */
     public int getPoints() {
         return points;
