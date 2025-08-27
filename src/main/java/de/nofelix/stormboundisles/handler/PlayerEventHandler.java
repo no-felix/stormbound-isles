@@ -83,7 +83,7 @@ public final class PlayerEventHandler {
 	 * Called each server tick to enforce island boundaries in BUILD phase.
 	 */
 	private static void onServerTick(MinecraftServer server) {
-		if (GameManager.phase != GamePhase.BUILD)
+		if (GameManager.getPhase() != GamePhase.BUILD)
 			return;
 
 		if (++boundaryCheckCounter < ConfigManager.getPlayerBoundaryCheckInterval()) {
@@ -235,7 +235,8 @@ public final class PlayerEventHandler {
 	 * Applies point penalty on player death during BUILD or PVP phases.
 	 */
 	private static void handlePlayerDeath(ServerPlayerEntity player, DamageSource src) {
-		if (GameManager.phase != GamePhase.BUILD && GameManager.phase != GamePhase.PVP) {
+		GamePhase currentPhase = GameManager.getPhase();
+		if (currentPhase != GamePhase.BUILD && currentPhase != GamePhase.PVP) {
 			return;
 		}
 
@@ -314,7 +315,7 @@ public final class PlayerEventHandler {
 	 * phase if configured.
 	 */
 	private static void reviveAndTeleportPlayer(Team victimTeam, ServerPlayerEntity victim) {
-		if (GameManager.phase != GamePhase.BUILD)
+		if (GameManager.getPhase() != GamePhase.BUILD)
 			return;
 
 		Island isl = DataManager.getIsland(victimTeam.getIslandId());

@@ -28,7 +28,7 @@ import java.util.UUID;
  */
 public final class GameManager {
     /** The current phase of the game. */
-    public static GamePhase phase = GamePhase.LOBBY;
+    private static GamePhase phase = GamePhase.LOBBY;
     /** The number of ticks elapsed in the current game phase. */
     private static int phaseTicks = 0;
 
@@ -383,38 +383,34 @@ public final class GameManager {
         StormboundIslesMod.LOGGER.info("Teleporting players to their islands");
 
         for (Team team : DataManager.getTeams().values()) {
-            if (team.getIslandId() == null) {
-                StormboundIslesMod.LOGGER.warn("Team {} has no assigned island, skipping teleport", team.getName());
-                continue;
-            }
-
-            Island island = DataManager.getIsland(team.getIslandId());
-            if (island == null || island.getZone() == null) {
-                StormboundIslesMod.LOGGER.warn("Island {} not found or has no defined zone", team.getIslandId());
-                continue;
-            }
-
-            for (UUID uuid : team.getMembers()) {
-                ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
-                if (player != null) {
-                    // Determine teleport target: use custom spawn if defined, else center of zone
-                    BlockPos target;
-                    if (island.getSpawnY() >= 0) {
-                        target = getRandomSpawnPosition(island, server.getOverworld());
-                    } else {
-                        StormboundIslesMod.LOGGER.error(
-                                "Island {} has no defined spawn position, unable to teleport player", island.getId());
-                        // broadcast message to all players
-                        server.getPlayerManager()
-                                .broadcast(Text.literal("Island " + island.getId()
-                                        + " has no defined spawn position, unable to teleport " + player.getName()),
-                                        false);
-                        // skip teleportation for this player
-                        continue;
+            if (team.getIslandId() != null) {
+                Island island = DataManager.getIsland(team.getIslandId());
+                if (island != null && island.getZone() != null) {
+                    for (UUID uuid : team.getMembers()) {
+                        ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+                        if (player != null) {
+                            // Determine teleport target: use custom spawn if defined, else center of zone
+                            BlockPos target;
+                            if (island.getSpawnY() >= 0) {
+                                target = getRandomSpawnPosition(island, server.getOverworld());
+                            } else {
+                                StormboundIslesMod.LOGGER.error(
+                                        "Island {} has no defined spawn position, unable to teleport player",
+                                        island.getId());
+                                // broadcast message to all players
+                                server.getPlayerManager()
+                                        .broadcast(Text.literal("Island " + island.getId()
+                                                + " has no defined spawn position, unable to teleport "
+                                                + player.getName()),
+                                                false);
+                                // skip teleportation for this player
+                                continue;
+                            }
+                            player.teleport(server.getOverworld(),
+                                    target.getX(), target.getY(), target.getZ(),
+                                    player.getYaw(), player.getPitch());
+                        }
                     }
-                    player.teleport(server.getOverworld(),
-                            target.getX(), target.getY(), target.getZ(),
-                            player.getYaw(), player.getPitch());
                 }
             }
         }
@@ -428,21 +424,19 @@ public final class GameManager {
      */
     private static void onServerTick(MinecraftServer server) {
         // Handle pre-game countdown
-        if (isStarting) {
-            if (countdownTicks > 0) {
-                countdownTicks--;
-                // Update BossBar progress based on remaining countdown ticks
-                if (phaseBar != null) {
-                    float progress = (float) countdownTicks / ConfigManager.getGameCountdownDurationTicks();
-                    phaseBar.setPercent(progress);
-                    phaseBar.setName(Text.literal("Starting in " + (countdownTicks / 20 + 1) + "s"));
-                }
-                if (countdownTicks == 0) {
-                    isStarting = false;
-                    startGame(server);
-                }
-                return; // Don't process phase ticks during countdown
+        if (isStarting && countdownTicks > 0) {
+            countdownTicks--;
+            // Update BossBar progress based on remaining countdown ticks
+            if (phaseBar != null) {
+                float progress = (float) countdownTicks / ConfigManager.getGameCountdownDurationTicks();
+                phaseBar.setPercent(progress);
+                phaseBar.setName(Text.literal("Starting in " + (countdownTicks / 20 + 1) + "s"));
             }
+            if (countdownTicks == 0) {
+                isStarting = false;
+                startGame(server);
+            }
+            return; // Don't process phase ticks during countdown
         }
 
         if (phase == GamePhase.BUILD) {
@@ -514,5 +508,14 @@ public final class GameManager {
         int remainingHours = hours % 24;
 
         return days + "d " + remainingHours + "h " + remainingMinutes + "m";
+    }
+
+    /**
+     * Gets the current game phase.
+     * 
+     * @return The current GamePhase.
+     */
+    public static GamePhase getPhase() {
+        return phase;
     }
 }
