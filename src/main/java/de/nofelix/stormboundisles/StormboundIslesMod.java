@@ -1,9 +1,5 @@
 package de.nofelix.stormboundisles;
 
-import de.nofelix.stormboundisles.command.CommandManager;
-import de.nofelix.stormboundisles.game.GameManager;
-import de.nofelix.stormboundisles.handler.BuffAuraHandler;
-import de.nofelix.stormboundisles.handler.PlayerEventHandler;
 import de.nofelix.stormboundisles.init.InitializationRegistry;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -29,19 +25,6 @@ public final class StormboundIslesMod implements ModInitializer {
 
 		// Run all initialization methods discovered by the annotation scanner
 		InitializationRegistry.initializeAll(BASE_PACKAGE);
-
-		// Initialize and register commands using the command manager
-		// TODO: migrate to new initialization system from above
-		CommandManager commandManager = new CommandManager();
-		commandManager.register();
-
-		// Register remaining components
-		LOGGER.info("Registering BuffAuraHandler");
-		BuffAuraHandler.register();
-		LOGGER.info("Registering GameManager");
-		GameManager.register();
-		LOGGER.info("Registering PlayerEventHandler");
-		PlayerEventHandler.register();
 
 		LOGGER.info("Stormbound Isles Mod initialized!");
 	}

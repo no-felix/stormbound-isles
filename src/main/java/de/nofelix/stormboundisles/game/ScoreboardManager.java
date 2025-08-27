@@ -42,19 +42,21 @@ import java.util.UUID;
  * @see DataManager
  * @see Team
  */
-public class ScoreboardManager {
+public final class ScoreboardManager {
 	// Static state
 	private static Scoreboard scoreboard;
 	private static ScoreboardObjective objective;
 	private static MinecraftServer currentServer;
 
-	// Private constructor to prevent instantiation
+	// Track players who need a follow-up scoreboard sync (retry next tick)
+	private static final Set<java.util.UUID> pendingScoreboardSync = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * Private constructor to prevent instantiation.
+	 */
 	private ScoreboardManager() {
 		throw new UnsupportedOperationException("Utility class");
 	}
-
-	// Track players who need a follow-up scoreboard sync (retry next tick)
-	private static final Set<java.util.UUID> pendingScoreboardSync = ConcurrentHashMap.newKeySet();
 
 	/**
 	 * Initializes the scoreboard management system.

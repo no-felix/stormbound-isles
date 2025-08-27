@@ -19,7 +19,15 @@ import java.util.UUID;
  * player can
  * have one active polygon building session at a time, identified by their UUID.
  */
-public class PolygonBuilderManager {
+public final class PolygonBuilderManager {
+
+    /**
+     * Private constructor to prevent instantiation.
+     */
+    private PolygonBuilderManager() {
+        throw new UnsupportedOperationException("Utility class");
+    }
+
     /**
      * Represents a polygon zone being built by a player.
      * <p>

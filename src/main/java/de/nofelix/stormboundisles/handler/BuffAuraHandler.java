@@ -6,6 +6,7 @@ import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
 import de.nofelix.stormboundisles.data.IslandType;
 import de.nofelix.stormboundisles.data.Team;
+import de.nofelix.stormboundisles.init.Initialize;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
@@ -28,8 +29,16 @@ public class BuffAuraHandler {
 	private static int tickCounter = 0;
 
 	/**
+	 * Private constructor to prevent instantiation.
+	 */
+	private BuffAuraHandler() {
+		throw new UnsupportedOperationException("Utility class");
+	}
+
+	/**
 	 * Registers the server tick listener for buff application.
 	 */
+	@Initialize(priority = 1400, description = "Register buff aura handler")
 	public static void register() {
 		StormboundIslesMod.LOGGER.info("Registering BuffAuraHandler");
 		ServerTickEvents.END_SERVER_TICK.register(BuffAuraHandler::onServerTick);
