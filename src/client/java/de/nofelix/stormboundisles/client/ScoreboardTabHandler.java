@@ -27,7 +27,9 @@ public class ScoreboardTabHandler {
     private static boolean tabPressed = false;
     private static boolean scoreboardVisible = false;
 
-    // Prevent instantiation
+    /**
+     * Private constructor to prevent instantiation.
+     */
     private ScoreboardTabHandler() {
         throw new UnsupportedOperationException("Utility class");
     }

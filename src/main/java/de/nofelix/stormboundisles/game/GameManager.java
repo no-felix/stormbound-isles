@@ -5,6 +5,7 @@ import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
 import de.nofelix.stormboundisles.data.Team;
+import de.nofelix.stormboundisles.init.Initialize;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -25,7 +26,7 @@ import java.util.UUID;
  * Manages the overall game flow, including phases, timers, player states, and
  * game events.
  */
-public class GameManager {
+public final class GameManager {
     /** The current phase of the game. */
     public static GamePhase phase = GamePhase.LOBBY;
     /** The number of ticks elapsed in the current game phase. */
@@ -45,10 +46,18 @@ public class GameManager {
     private static final Random random = new Random();
 
     /**
+     * Private constructor to prevent instantiation.
+     */
+    private GameManager() {
+        throw new UnsupportedOperationException("Utility class");
+    }
+
+    /**
      * Registers game manager event listeners.
      * Initializes BossBar restoration on server start and registers the server tick
      * listener.
      */
+    @Initialize(priority = 1400, description = "Register game manager")
     public static void register() {
         StormboundIslesMod.LOGGER.info("Registering GameManager");
         // Restore bossbar on server start when loading from game_state

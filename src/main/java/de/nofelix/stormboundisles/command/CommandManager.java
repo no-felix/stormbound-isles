@@ -25,22 +25,17 @@ public class CommandManager {
     private static final String SBI = "sbi";
 
     // Command categories
-    private final AdminCommands adminCommands;
-    private final IslandCommands islandCommands;
-    private final TeamCommands teamCommands;
-    private final PointsCommands pointsCommands;
-    private final PlayerCommands playerCommands;
+    private static final AdminCommands adminCommands = new AdminCommands();
+    private static final IslandCommands islandCommands = new IslandCommands();
+    private static final TeamCommands teamCommands = new TeamCommands();
+    private static final PointsCommands pointsCommands = new PointsCommands();
+    private static final PlayerCommands playerCommands = new PlayerCommands();
 
     /**
-     * Creates a new command manager and initializes all command categories.
+     * Private constructor to prevent instantiation.
      */
-    public CommandManager() {
-        // Create command categories
-        this.adminCommands = new AdminCommands();
-        this.islandCommands = new IslandCommands();
-        this.teamCommands = new TeamCommands();
-        this.pointsCommands = new PointsCommands();
-        this.playerCommands = new PlayerCommands();
+    private CommandManager() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
     /**
@@ -48,7 +43,8 @@ public class CommandManager {
      * This hooks into Fabric's command registration API to add the mod's commands
      * to the game.
      */
-    public void register() {
+    @Initialize(priority = 1400, description = "Register mod commands")
+    public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             // Main command builder
             LiteralArgumentBuilder<ServerCommandSource> sbiCommand = net.minecraft.server.command.CommandManager
