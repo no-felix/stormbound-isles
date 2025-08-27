@@ -354,10 +354,32 @@ public final class DataManager {
      */
     @NotNull
     private static Path ensureDataDirectory(@NotNull Path runDir) throws IOException {
-        Path worldDir = runDir.resolve("world");
-        Path baseDir = Files.isDirectory(worldDir) ? worldDir : runDir;
-        Path dataDir = baseDir.resolve(DATA_DIR_NAME);
+        Path serverProperties = runDir.resolve("server.properties");
+        boolean isServer = Files.exists(serverProperties);
 
+        String worldDirName = "world";
+        if (isServer) {
+            // Try to read level-name from server.properties
+            try (var lines = Files.lines(serverProperties)) {
+                String levelName = lines
+                        .filter(line -> line.startsWith("level-name="))
+                        .map(line -> line.substring("level-name=".length()))
+                        .findFirst()
+                        .orElse("world");
+                worldDirName = levelName;
+            } catch (Exception e) {
+                // Ignore, use default
+            }
+        }
+
+        Path baseDir;
+        if (isServer) {
+            baseDir = runDir.resolve(worldDirName);
+        } else {
+            baseDir = runDir;
+        }
+
+        Path dataDir = baseDir.resolve(DATA_DIR_NAME);
         Files.createDirectories(dataDir);
         return dataDir;
     }
