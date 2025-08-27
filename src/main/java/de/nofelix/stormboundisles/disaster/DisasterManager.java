@@ -80,7 +80,11 @@ public final class DisasterManager {
     private static final Object2LongMap<String> lastPulseTimes = new Object2LongOpenHashMap<>();
     private static final Object2LongMap<String> lastActionbarTimes = new Object2LongOpenHashMap<>();
 
+    /**
+     * Private constructor to prevent instantiation.
+     */
     private DisasterManager() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
     // Initialization
@@ -89,7 +93,7 @@ public final class DisasterManager {
      * Initializes the DisasterManager and registers server tick event listeners.
      * This method is automatically called during mod initialization.
      */
-    @Initialize(priority = 1500)
+    @Initialize(priority = 1500, description = "Initialize disaster management system")
     public static void initialize() {
         LOGGER.info("Initializing DisasterManager...");
         ServerTickEvents.END_SERVER_TICK.register(DisasterManager::onServerTick);

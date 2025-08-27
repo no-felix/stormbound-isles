@@ -24,27 +24,25 @@ import java.util.stream.Stream;
  * All providers are automatically initialized during mod startup via the
  * {@link Initialize} annotation.
  */
-public class CommandSuggestions {
-        /** Cached list of game phase names for suggestions */
-        private static List<String> GAME_PHASE_NAMES;
-
-        /** Cached list of disaster type names for suggestions */
-        private static List<String> DISASTER_TYPE_NAMES;
+public final class CommandSuggestions {
 
         /** Suggests island IDs from the data manager */
         public static SuggestionProvider<ServerCommandSource> ISLAND_ID_SUGGESTIONS;
-
         /** Suggests team names from the data manager */
         public static SuggestionProvider<ServerCommandSource> TEAM_NAME_SUGGESTIONS;
-
         /** Suggests disaster types from the DisasterType enum */
         public static SuggestionProvider<ServerCommandSource> DISASTER_TYPE_SUGGESTIONS;
-
         /** Suggests game phases from the GamePhase enum */
         public static SuggestionProvider<ServerCommandSource> GAME_PHASE_SUGGESTIONS;
-
         /** Suggests online player names from the server's player manager */
         public static SuggestionProvider<ServerCommandSource> PLAYER_SUGGESTIONS;
+
+        /**
+         * Private constructor to prevent instantiation.
+         */
+        private CommandSuggestions() {
+                throw new UnsupportedOperationException("Utility class");
+        }
 
         /**
          * Initializes all suggestion providers.
@@ -54,14 +52,16 @@ public class CommandSuggestions {
          */
         @Initialize(priority = 2000, description = "Initialize command suggestion providers")
         public static void initialize() {
+                List<String> DISASTER_TYPE_NAMES;
+                List<String> GAME_PHASE_NAMES;
                 // Cache enum values to avoid recreating them for each suggestion
                 GAME_PHASE_NAMES = Stream.of(GamePhase.values())
                                 .map(Enum::name)
-                                .collect(Collectors.toUnmodifiableList());
+                                .toList();
 
                 DISASTER_TYPE_NAMES = Stream.of(DisasterType.values())
                                 .map(Enum::name)
-                                .collect(Collectors.toUnmodifiableList());
+                                .toList();
 
                 // Create suggestion providers
                 ISLAND_ID_SUGGESTIONS = (ctx, builder) -> CommandSource
