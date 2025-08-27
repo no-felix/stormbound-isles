@@ -1,7 +1,7 @@
 package de.nofelix.stormboundisles;
 
 import de.nofelix.stormboundisles.init.InitializationRegistry;
-import net.fabricmc.api.ModInitializer;
+import net.fabricmc.api.DedicatedServerModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
  * Main Fabric mod class for Stormbound Isles.
  * Initializes config, data, commands, game systems, and event handlers.
  */
-public final class StormboundIslesMod implements ModInitializer {
+public final class StormboundIslesMod implements DedicatedServerModInitializer {
 	public static final String MOD_ID = "stormboundisles";
 	public static final String BASE_PACKAGE = "de.nofelix.stormboundisles";
 
@@ -20,7 +20,7 @@ public final class StormboundIslesMod implements ModInitializer {
 	 * Loads configuration and data, then registers commands and handlers.
 	 */
 	@Override
-	public void onInitialize() {
+	public void onInitializeServer() {
 		LOGGER.info("Stormbound Isles Mod initializing...");
 
 		// Run all initialization methods discovered by the annotation scanner

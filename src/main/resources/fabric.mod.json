@@ -13,7 +13,7 @@
   "icon": "icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["de.nofelix.stormboundisles.StormboundIslesMod"],
+    "server": ["de.nofelix.stormboundisles.StormboundIslesMod"],
     "client": ["de.nofelix.StormboundIslesClient"]
   },
   "mixins": [
