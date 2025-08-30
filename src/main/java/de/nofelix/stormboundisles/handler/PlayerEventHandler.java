@@ -322,7 +322,13 @@ public final class PlayerEventHandler {
 		if (isl == null || !isl.hasSpawnPoint())
 			return;
 
-		ServerWorld world = victim.getServerWorld();
+		ServerWorld world = victim.getServer().getWorld(World.OVERWORLD);
+		if (world == null) {
+			StormboundIslesMod.LOGGER.warn(
+					"Overworld ServerWorld is not available, cannot teleport player {} to island spawn.",
+					victim.getName().getString());
+			return;
+		}
 		int tx = isl.getSpawnX();
 		int ty = isl.getSpawnY();
 		int tz = isl.getSpawnZ();
