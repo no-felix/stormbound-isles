@@ -179,15 +179,15 @@ public final class GameManager {
 
         switch (phase) {
             case LOBBY, ENDED:
-                setPvp(server, false);
+                setControlledPhaseGameRules(server);
                 setAllPlayersGameMode(server, GameMode.ADVENTURE);
                 break;
             case BUILD:
-                setPvp(server, false);
+                setBuildPhaseGameRules(server);
                 setAllPlayersGameMode(server, GameMode.SURVIVAL);
                 break;
             case PVP:
-                setPvp(server, true);
+                setPvpPhaseGameRules(server);
                 setAllPlayersGameMode(server, GameMode.SURVIVAL);
                 server.getPlayerManager().broadcast(Text.literal("PvP phase started!"), false);
                 break;
@@ -286,23 +286,51 @@ public final class GameManager {
     }
 
     /**
-     * Configures server-wide PvP settings and related game rules.
+     * Configures game rules for lobby and ended phases.
+     * Disables most game mechanics to create a controlled environment.
      * 
-     * @param server  The Minecraft server instance.
-     * @param enabled Whether PvP should be enabled.
+     * @param server The Minecraft server instance.
      */
-    private static void setPvp(MinecraftServer server, boolean enabled) {
-        StormboundIslesMod.LOGGER.debug("Setting PvP enabled: {}", enabled);
+    private static void setControlledPhaseGameRules(MinecraftServer server) {
+        StormboundIslesMod.LOGGER.debug("Setting controlled phase game rules (lobby/ended)");
+        server.getOverworld().getGameRules().get(GameRules.DO_IMMEDIATE_RESPAWN).set(true, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(false, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_MOB_SPAWNING).set(false, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_INSOMNIA).set(false, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_WEATHER_CYCLE).set(false, server);
+        server.setPvpEnabled(false);
+    }
+
+    /**
+     * Configures game rules for the build phase.
+     * Enables normal game mechanics but keeps PvP disabled.
+     * 
+     * @param server The Minecraft server instance.
+     */
+    private static void setBuildPhaseGameRules(MinecraftServer server) {
+        StormboundIslesMod.LOGGER.debug("Setting build phase game rules");
         server.getOverworld().getGameRules().get(GameRules.DO_IMMEDIATE_RESPAWN).set(true, server);
         server.getOverworld().getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(true, server);
         server.getOverworld().getGameRules().get(GameRules.DO_MOB_SPAWNING).set(true, server);
         server.getOverworld().getGameRules().get(GameRules.DO_INSOMNIA).set(true, server);
-        server.getOverworld().getGameRules().get(GameRules.DO_PATROL_SPAWNING).set(true, server);
-        server.getOverworld().getGameRules().get(GameRules.DO_TRADER_SPAWNING).set(true, server);
         server.getOverworld().getGameRules().get(GameRules.DO_WEATHER_CYCLE).set(true, server);
-        server.getOverworld().getGameRules().get(GameRules.DO_TILE_DROPS).set(true, server);
-        server.getOverworld().getGameRules().get(GameRules.DO_ENTITY_DROPS).set(true, server);
-        server.setPvpEnabled(enabled);
+        server.setPvpEnabled(false);
+    }
+
+    /**
+     * Configures game rules for the PvP phase.
+     * Enables all game mechanics including PvP combat.
+     * 
+     * @param server The Minecraft server instance.
+     */
+    private static void setPvpPhaseGameRules(MinecraftServer server) {
+        StormboundIslesMod.LOGGER.debug("Setting PvP phase game rules");
+        server.getOverworld().getGameRules().get(GameRules.DO_IMMEDIATE_RESPAWN).set(true, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(true, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_MOB_SPAWNING).set(true, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_INSOMNIA).set(true, server);
+        server.getOverworld().getGameRules().get(GameRules.DO_WEATHER_CYCLE).set(true, server);
+        server.setPvpEnabled(true);
     }
 
     /**
