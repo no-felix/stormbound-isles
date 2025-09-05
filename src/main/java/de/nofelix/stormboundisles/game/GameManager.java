@@ -60,8 +60,11 @@ public final class GameManager {
     @Initialize(priority = 1400, description = "Register game manager")
     public static void register() {
         StormboundIslesMod.LOGGER.info("Registering GameManager");
-        // Restore bossbar on server start when loading from game_state
-        ServerLifecycleEvents.SERVER_STARTED.register(GameManager::setupBossBar);
+        // Restore game state and apply current phase rules on server start
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            setupBossBar(server);
+            applyCurrentPhaseGameRules(server);
+        });
         ServerTickEvents.END_SERVER_TICK.register(GameManager::onServerTick);
 
         // Add player to bossbar when they join
@@ -283,6 +286,27 @@ public final class GameManager {
             case ENDED -> BossBar.Color.PURPLE;
             default -> BossBar.Color.WHITE;
         };
+    }
+
+    /**
+     * Applies game rules for the current active phase.
+     * Useful for server startup or when restoring game state.
+     * 
+     * @param server The Minecraft server instance.
+     */
+    public static void applyCurrentPhaseGameRules(MinecraftServer server) {
+        StormboundIslesMod.LOGGER.info("Applying game rules for current phase: {}", phase);
+        switch (phase) {
+            case LOBBY, ENDED:
+                setControlledPhaseGameRules(server);
+                break;
+            case BUILD:
+                setBuildPhaseGameRules(server);
+                break;
+            case PVP:
+                setPvpPhaseGameRules(server);
+                break;
+        }
     }
 
     /**
