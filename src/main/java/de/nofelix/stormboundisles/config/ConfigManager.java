@@ -43,8 +43,8 @@ public final class ConfigManager {
         static final int BOUNDARY_CHECK_INTERVAL = 10;
         static final double BOUNDARY_PUSH_STEP = 1.0;
         static final int BOUNDARY_PUSH_MAX_STEPS = 10;
-        static final int DEATH_PENALTY = 10;
-        static final int KILL_REWARD = 5;
+        static final int DEATH_PENALTY = 5;
+        static final int KILL_REWARD = 10;
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
         static final int BUFF_UPDATE_INTERVAL = 60;
