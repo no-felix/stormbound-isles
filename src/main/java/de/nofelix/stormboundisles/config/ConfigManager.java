@@ -45,6 +45,12 @@ public final class ConfigManager {
         static final int BOUNDARY_PUSH_MAX_STEPS = 10;
         static final int DEATH_PENALTY = 5;
         static final int KILL_REWARD = 10;
+        static final int SURVIVE_PER_PLAYER_PVP = 3;
+        static final int DAILY_NO_DEATH_BONUS_PER_PLAYER = 2;
+        static final int PHASE_INTACT_BONUS_PER_PLAYER = 8;
+        static final int ACTIVITY_THRESHOLD_SECONDS = 3600; // 1 hour
+        static final boolean ENABLE_DAILY_IN_BUILD = true;
+        static final int MAX_POINTS_PER_DAY = 500;
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
         static final int BUFF_UPDATE_INTERVAL = 60;
@@ -206,6 +212,7 @@ public final class ConfigManager {
 
         corrected |= validateGameSettings();
         corrected |= validatePlayerSettings();
+        corrected |= validateRewardSettings();
         corrected |= validateBuffSettings();
         corrected |= validateScoreboardSettings();
         corrected |= validateDisasterSettings();
@@ -267,6 +274,44 @@ public final class ConfigManager {
         if (config.player.boundaryPushMaxSteps <= 0 || config.player.boundaryPushMaxSteps > 100) {
             config.player.boundaryPushMaxSteps = Defaults.BOUNDARY_PUSH_MAX_STEPS;
             LOGGER.warn("Invalid boundaryPushMaxSteps, reset to default: {}", config.player.boundaryPushMaxSteps);
+            corrected = true;
+        }
+
+        return corrected;
+    }
+
+    private static boolean validateRewardSettings() {
+        boolean corrected = false;
+        if (config.rewards.survivePerPlayerPvP < 0 || config.rewards.survivePerPlayerPvP > 10000) {
+            config.rewards.survivePerPlayerPvP = Defaults.SURVIVE_PER_PLAYER_PVP;
+            LOGGER.warn("Invalid survivePerPlayerPvP, reset to default: {}", config.rewards.survivePerPlayerPvP);
+            corrected = true;
+        }
+
+        if (config.rewards.dailyNoDeathBonusPerPlayer < 0 || config.rewards.dailyNoDeathBonusPerPlayer > 10000) {
+            config.rewards.dailyNoDeathBonusPerPlayer = Defaults.DAILY_NO_DEATH_BONUS_PER_PLAYER;
+            LOGGER.warn("Invalid dailyNoDeathBonusPerPlayer, reset to default: {}",
+                    config.rewards.dailyNoDeathBonusPerPlayer);
+            corrected = true;
+        }
+
+        if (config.rewards.phaseIntactBonusPerPlayer < 0 || config.rewards.phaseIntactBonusPerPlayer > 10000) {
+            config.rewards.phaseIntactBonusPerPlayer = Defaults.PHASE_INTACT_BONUS_PER_PLAYER;
+            LOGGER.warn("Invalid phaseIntactBonusPerPlayer, reset to default: {}",
+                    config.rewards.phaseIntactBonusPerPlayer);
+            corrected = true;
+        }
+
+        if (config.rewards.activityThresholdSeconds <= 0 || config.rewards.activityThresholdSeconds > 24 * 60 * 60) {
+            config.rewards.activityThresholdSeconds = Defaults.ACTIVITY_THRESHOLD_SECONDS;
+            LOGGER.warn("Invalid activityThresholdSeconds, reset to default: {}",
+                    config.rewards.activityThresholdSeconds);
+            corrected = true;
+        }
+
+        if (config.rewards.maxPointsPerDay < 0 || config.rewards.maxPointsPerDay > 100000) {
+            config.rewards.maxPointsPerDay = Defaults.MAX_POINTS_PER_DAY;
+            LOGGER.warn("Invalid maxPointsPerDay, reset to default: {}", config.rewards.maxPointsPerDay);
             corrected = true;
         }
 
@@ -434,6 +479,31 @@ public final class ConfigManager {
         return config.player.boundaryPushMaxSteps;
     }
 
+    // Reward settings getters
+    public static int getSurvivePerPlayerPvP() {
+        return config.rewards.survivePerPlayerPvP;
+    }
+
+    public static int getDailyNoDeathBonusPerPlayer() {
+        return config.rewards.dailyNoDeathBonusPerPlayer;
+    }
+
+    public static int getPhaseIntactBonusPerPlayer() {
+        return config.rewards.phaseIntactBonusPerPlayer;
+    }
+
+    public static int getActivityThresholdSeconds() {
+        return config.rewards.activityThresholdSeconds;
+    }
+
+    public static boolean isDailyEnabledInBuild() {
+        return config.rewards.enableDailyInBuild;
+    }
+
+    public static int getMaxPointsPerDay() {
+        return config.rewards.maxPointsPerDay;
+    }
+
     // Buff settings getters
     public static int getBuffUpdateInterval() {
         return config.buff.buffUpdateInterval;
@@ -509,6 +579,7 @@ public final class ConfigManager {
     private static class Config {
         Game game = new Game();
         Player player = new Player();
+        Rewards rewards = new Rewards();
         Buff buff = new Buff();
         Scoreboard scoreboard = new Scoreboard();
         Disaster disaster = new Disaster();
@@ -558,6 +629,18 @@ public final class ConfigManager {
              * island. Default: 5 points.
              */
             int killReward = Defaults.KILL_REWARD;
+        }
+
+        /**
+         * Reward-related settings.
+         */
+        static class Rewards {
+            int survivePerPlayerPvP = Defaults.SURVIVE_PER_PLAYER_PVP;
+            int dailyNoDeathBonusPerPlayer = Defaults.DAILY_NO_DEATH_BONUS_PER_PLAYER;
+            int phaseIntactBonusPerPlayer = Defaults.PHASE_INTACT_BONUS_PER_PLAYER;
+            int activityThresholdSeconds = Defaults.ACTIVITY_THRESHOLD_SECONDS;
+            boolean enableDailyInBuild = Defaults.ENABLE_DAILY_IN_BUILD;
+            int maxPointsPerDay = Defaults.MAX_POINTS_PER_DAY;
         }
 
         /**
