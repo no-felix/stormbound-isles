@@ -21,6 +21,10 @@ import net.minecraft.world.GameRules;
 
 import java.util.Random;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+import java.time.ZonedDateTime;
 
 /**
  * Manages the overall game flow, including phases, timers, player states, and
@@ -44,6 +48,15 @@ public final class GameManager {
 
     /** Random number generator for various game mechanics. */
     private static final Random random = new Random();
+    // Runtime tracking for rewards
+    private static final Map<UUID, Integer> onlineSecondsToday = new HashMap<>();
+    private static final Map<UUID, Boolean> diedToday = new HashMap<>();
+    private static final Map<String, Integer> teamDailyDeathCount = new HashMap<>();
+    private static final Map<String, Integer> teamPhaseDeathCount = new HashMap<>();
+    private static final Map<String, Integer> appliedPointsToday = new HashMap<>();
+    private static long nextDailyRunEpochSec = 0;
+    // Track current session join epoch seconds to accumulate online time
+    private static final Map<UUID, Long> joinEpochSec = new HashMap<>();
 
     /**
      * Private constructor to prevent instantiation.
@@ -64,6 +77,8 @@ public final class GameManager {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             setupBossBar(server);
             applyCurrentPhaseGameRules(server);
+            // initialize next daily run to next midnight
+            nextDailyRunEpochSec = computeNextMidnightEpochSec();
         });
         ServerTickEvents.END_SERVER_TICK.register(GameManager::onServerTick);
 
@@ -71,6 +86,25 @@ public final class GameManager {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             if (phaseBar != null && phase != GamePhase.ENDED) {
                 phaseBar.addPlayer(handler.getPlayer());
+            }
+            // Initialize tracking for player
+            UUID id = handler.getPlayer().getUuid();
+            onlineSecondsToday.putIfAbsent(id, 0);
+            diedToday.putIfAbsent(id, false);
+            joinEpochSec.put(id, TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()));
+        });
+
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            if (handler != null && handler.getPlayer() != null) {
+                UUID id = handler.getPlayer().getUuid();
+                Long joined = joinEpochSec.get(id);
+                if (joined != null) {
+                    long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+                    int prev = onlineSecondsToday.getOrDefault(id, 0);
+                    int add = (int) Math.max(0, now - joined);
+                    onlineSecondsToday.put(id, prev + add);
+                }
+                joinEpochSec.remove(id);
             }
         });
     }
@@ -173,12 +207,21 @@ public final class GameManager {
      */
     public static void setPhase(GamePhase newPhase, MinecraftServer server) {
         StormboundIslesMod.LOGGER.info("Changing phase from {} to {}", phase, newPhase);
+        // Remember previous phase so we can apply end-of-phase awards for it
+        GamePhase previousPhase = phase;
         phase = newPhase;
         phaseTicks = 0;
 
         // Update bossbar and persist
         setupBossBar(server);
         DataManager.saveGameState();
+        // If we are leaving a phase that can yield a phase-intact bonus, apply it
+        if (previousPhase != phase) {
+            applyPhaseIntactAwards(server, previousPhase);
+        }
+
+        // Reset phase death counters when phase changes
+        resetPhaseDeathCounters();
 
         switch (phase) {
             case LOBBY, ENDED:
@@ -194,6 +237,46 @@ public final class GameManager {
                 setAllPlayersGameMode(server, GameMode.SURVIVAL);
                 server.getPlayerManager().broadcast(Text.literal("PvP phase started!"), false);
                 break;
+        }
+    }
+
+    /**
+     * Apply phase-intact bonus for teams that had zero deaths during the specified
+     * ended phase. Honors the daily max points cap so teams don't exceed the
+     * configured daily limit.
+     */
+    private static void applyPhaseIntactAwards(MinecraftServer server, GamePhase endedPhase) {
+        if (endedPhase == null)
+            return;
+
+        // Only apply for BUILD and PVP phase endings
+        if (!(endedPhase == GamePhase.BUILD || endedPhase == GamePhase.PVP))
+            return;
+
+        StormboundIslesMod.LOGGER.info("Applying phase-intact awards for phase: {}", endedPhase);
+
+        int perPlayer = ConfigManager.getPhaseIntactBonusPerPlayer();
+        int cap = ConfigManager.getMaxPointsPerDay();
+
+        for (Team team : DataManager.getTeams().values()) {
+            String teamName = team.getName();
+            int deaths = teamPhaseDeathCount.getOrDefault(teamName, 0);
+            if (deaths == 0) {
+                int teamSize = team.getMembers().size();
+                int award = teamSize * perPlayer;
+                int already = appliedPointsToday.getOrDefault(teamName, 0);
+                int allowed = Math.max(0, cap - already);
+                int actual = Math.min(award, allowed);
+                if (actual > 0) {
+                    team.addPoints(actual);
+                    ScoreboardManager.updateTeamScore(teamName);
+                    server.getPlayerManager().broadcast(Text.literal(
+                            "Team " + teamName + " awarded " + actual + " points (Phase intact: " + endedPhase + ")"),
+                            false);
+                    appliedPointsToday.put(teamName, already + actual);
+                    DataManager.saveAll();
+                }
+            }
         }
     }
 
@@ -535,6 +618,100 @@ public final class GameManager {
                 server.getPlayerManager().broadcast(Text.literal("Game ended!"), false);
             }
         }
+        // Run daily reward routine exactly at midnight server local time
+        long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+        if (nextDailyRunEpochSec == 0) {
+            nextDailyRunEpochSec = computeNextMidnightEpochSec();
+        }
+        if (now >= nextDailyRunEpochSec) {
+            runDailyAwards(server);
+            // schedule next midnight
+            nextDailyRunEpochSec += 24 * 60 * 60;
+        }
+    }
+
+    private static long computeNextMidnightEpochSec() {
+        ZonedDateTime now = ZonedDateTime.now();
+        ZonedDateTime nextMidnight = now.plusDays(1).toLocalDate().atStartOfDay(now.getZone());
+        return nextMidnight.toEpochSecond();
+    }
+
+    private static void runDailyAwards(MinecraftServer server) {
+        StormboundIslesMod.LOGGER.info("Running daily survival/no-death awards");
+
+        // Determine smallest team size to use as the required-active threshold
+        int smallestTeamSize = Integer.MAX_VALUE;
+        for (Team t : DataManager.getTeams().values()) {
+            smallestTeamSize = Math.min(smallestTeamSize, t.getMembers().size());
+        }
+        if (smallestTeamSize == Integer.MAX_VALUE) {
+            smallestTeamSize = 0;
+        }
+
+        // For each team, compute survivors and award points
+        for (Team team : DataManager.getTeams().values()) {
+            String teamName = team.getName();
+            int teamSize = team.getMembers().size();
+
+            int survivors = 0;
+            int activeCount = 0;
+            for (UUID member : team.getMembers()) {
+                Integer secs = onlineSecondsToday.getOrDefault(member, 0);
+                boolean active = secs >= ConfigManager.getActivityThresholdSeconds();
+                if (active) {
+                    activeCount++;
+                }
+                boolean died = diedToday.getOrDefault(member, false);
+                ServerPlayerEntity player = server.getPlayerManager().getPlayer(member);
+                boolean currentlyAlive = player != null && player.isAlive();
+                if (active && !died && currentlyAlive) {
+                    survivors++;
+                }
+            }
+
+            int pointsSurvival = survivors * ConfigManager.getSurvivePerPlayerPvP();
+            int pointsNoDeath = 0;
+            int teamDeaths = teamDailyDeathCount.getOrDefault(teamName, 0);
+            // Require at least `requiredActive` active players to award the no-death bonus.
+            int requiredActive = Math.min(teamSize, smallestTeamSize);
+            if (teamDeaths == 0 && activeCount >= requiredActive && requiredActive > 0) {
+                pointsNoDeath = teamSize * ConfigManager.getDailyNoDeathBonusPerPlayer();
+            }
+
+            int total = pointsSurvival + pointsNoDeath;
+            int already = appliedPointsToday.getOrDefault(teamName, 0);
+            int cap = ConfigManager.getMaxPointsPerDay();
+            int allowed = Math.max(0, cap - already);
+            int award = Math.min(total, allowed);
+
+            if (award > 0) {
+                team.addPoints(award);
+                ScoreboardManager.updateTeamScore(teamName);
+                server.getPlayerManager().broadcast(Text.literal(
+                        "Team " + teamName + " awarded " + award + " points (Daily survival/no-death)"), false);
+                appliedPointsToday.put(teamName, already + award);
+                DataManager.saveAll();
+            }
+        }
+
+        // Reset daily counters
+        // Clear accumulated online seconds for the new day, but preserve currently
+        // connected players so they keep accumulating after the reset. Set their
+        // joinEpochSec to now so we start fresh from this moment for the new day.
+        long resetNow = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+        // Retain only currently connected players in onlineSecondsToday, then set their
+        // accumulated seconds to 0 and reset their join timestamp to now so they start
+        // accumulating for the new day from this moment.
+        onlineSecondsToday.keySet().retainAll(joinEpochSec.keySet());
+        for (UUID id : joinEpochSec.keySet()) {
+            onlineSecondsToday.putIfAbsent(id, 0);
+            joinEpochSec.put(id, resetNow);
+        }
+
+        // Reset died flags and team counters
+        diedToday.replaceAll((k, v) -> false);
+        teamDailyDeathCount.replaceAll((k, v) -> 0);
+        appliedPointsToday.replaceAll((k, v) -> 0);
     }
 
     /**
@@ -569,5 +746,26 @@ public final class GameManager {
      */
     public static GamePhase getPhase() {
         return phase;
+    }
+
+    /**
+     * Record that a player died for daily/phase tracking.
+     * 
+     * @param playerId player UUID
+     * @param teamName team name string
+     */
+    public static void recordPlayerDeath(UUID playerId, String teamName) {
+        if (playerId == null || teamName == null)
+            return;
+        diedToday.put(playerId, true);
+        teamDailyDeathCount.put(teamName, teamDailyDeathCount.getOrDefault(teamName, 0) + 1);
+        teamPhaseDeathCount.put(teamName, teamPhaseDeathCount.getOrDefault(teamName, 0) + 1);
+    }
+
+    /**
+     * Reset phase death counters (called on phase change by setPhase).
+     */
+    private static void resetPhaseDeathCounters() {
+        teamPhaseDeathCount.replaceAll((k, v) -> 0);
     }
 }

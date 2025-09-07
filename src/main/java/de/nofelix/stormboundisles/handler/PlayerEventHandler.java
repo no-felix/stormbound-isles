@@ -216,19 +216,9 @@ public final class PlayerEventHandler {
 		BlockPos above = target.up();
 		BlockPos below = target.down();
 
-		// Destination and one block above must be air
-		if (!world.getBlockState(target).isAir())
-			return false;
-		if (!world.getBlockState(above).isAir())
-			return false;
-
-		// Block below must exist and not be liquid
-		if (world.getBlockState(below).isAir())
-			return false;
-		if (!world.getFluidState(below).isEmpty())
-			return false;
-
-		return true;
+		// Destination and one block above must be air, block below must exist and not be liquid
+		return world.getBlockState(target).isAir() && world.getBlockState(above).isAir() &&
+			   !world.getBlockState(below).isAir() && world.getFluidState(below).isEmpty();
 	}
 
 	/**
@@ -246,6 +236,8 @@ public final class PlayerEventHandler {
 				.findFirst();
 
 		team.ifPresent(t -> {
+			// record death for daily/phase tracking
+			GameManager.recordPlayerDeath(id, t.getName());
 			applyDeathPenalty(t, player);
 			awardKillReward(t, player, src);
 			reviveAndTeleportPlayer(t, player);
