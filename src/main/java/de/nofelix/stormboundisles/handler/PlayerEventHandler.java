@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.util.Formatting;
+import net.minecraft.block.BedBlock;
 
 /**
  * Handles player-related events: death penalties and boundary enforcement
@@ -218,7 +219,7 @@ public final class PlayerEventHandler {
 
 		// Destination and one block above must be air, block below must exist and not be liquid
 		return world.getBlockState(target).isAir() && world.getBlockState(above).isAir() &&
-			   !world.getBlockState(below).isAir() && world.getFluidState(below).isEmpty();
+				!world.getBlockState(below).isAir() && world.getFluidState(below).isEmpty();
 	}
 
 	/**
@@ -303,30 +304,52 @@ public final class PlayerEventHandler {
 	}
 
 	/**
-	 * Revives and teleports the victim back to their island spawn during BUILD
+	 * Revives and teleports the victim back to their bed spawn or island spawn
+	 * during BUILD
 	 * phase if configured.
 	 */
 	private static void reviveAndTeleportPlayer(Team victimTeam, ServerPlayerEntity victim) {
 		if (GameManager.getPhase() != GamePhase.BUILD)
 			return;
 
-		Island isl = DataManager.getIsland(victimTeam.getIslandId());
-		if (isl == null || !isl.hasSpawnPoint())
-			return;
-
 		ServerWorld world = victim.getServer().getWorld(World.OVERWORLD);
 		if (world == null) {
 			StormboundIslesMod.LOGGER.warn(
-					"Overworld ServerWorld is not available, cannot teleport player {} to island spawn.",
+					"Overworld ServerWorld is not available, cannot teleport player {} to spawn.",
 					victim.getName().getString());
 			return;
 		}
-		int tx = isl.getSpawnX();
-		int ty = isl.getSpawnY();
-		int tz = isl.getSpawnZ();
+
+		// Determine target position: bed spawn if available and safe, else island spawn
+		double targetX = 0.0;
+		double targetY = 0.0;
+		double targetZ = 0.0;
+		boolean hasValidSpawn = false;
+
+		// Try bed spawn first
+		BlockPos bedPos = victim.getSpawnPointPosition();
+		if (bedPos != null && victim.getSpawnPointDimension() == World.OVERWORLD &&
+				world.getBlockState(bedPos).getBlock() instanceof BedBlock) {
+			targetX = bedPos.getX() + 0.5;
+			targetY = (double) bedPos.getY() + 1; // On top of the bed
+			targetZ = bedPos.getZ() + 0.5;
+			if (isSafeTeleport(world, targetX, targetY, targetZ)) {
+				hasValidSpawn = true;
+			}
+		}
+
+		// Fall back to island spawn if bed not available or not safe
+		if (!hasValidSpawn) {
+			Island isl = DataManager.getIsland(victimTeam.getIslandId());
+			if (isl == null || !isl.hasSpawnPoint())
+				return;
+			targetX = isl.getSpawnX() + 0.5;
+			targetY = isl.getSpawnY();
+			targetZ = isl.getSpawnZ() + 0.5;
+		}
 
 		// Teleport to spawn
-		victim.teleport(world, tx + 0.5, ty, tz + 0.5, victim.getYaw(), victim.getPitch());
+		victim.teleport(world, targetX, targetY, targetZ, victim.getYaw(), victim.getPitch());
 
 		// Revive (best effort)
 		try {
@@ -334,12 +357,13 @@ public final class PlayerEventHandler {
 			victim.getHungerManager().setFoodLevel(20);
 			victim.getHungerManager().setSaturationLevel(5.0f);
 		} catch (Exception e) {
-			StormboundIslesMod.LOGGER.warn("Failed to resolve owner via getOwnerUuid on attacker: {}", e.getMessage());
+			StormboundIslesMod.LOGGER.warn("Failed to revive player {}: {}", victim.getName().getString(),
+					e.getMessage());
 			e.printStackTrace();
 		}
 
 		// Safety repeat teleport
-		victim.teleport(world, tx + 0.5, ty, tz + 0.5, victim.getYaw(), victim.getPitch());
+		victim.teleport(world, targetX, targetY, targetZ, victim.getYaw(), victim.getPitch());
 	}
 
 	/**
