@@ -28,6 +28,8 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.util.Formatting;
 import net.minecraft.block.BedBlock;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.effect.StatusEffectInstance;
 
 /**
  * Handles player-related events: death penalties and boundary enforcement
@@ -356,6 +358,7 @@ public final class PlayerEventHandler {
 			victim.setHealth(victim.getMaxHealth());
 			victim.getHungerManager().setFoodLevel(20);
 			victim.getHungerManager().setSaturationLevel(5.0f);
+			victim.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 15 * 20, 1));
 		} catch (Exception e) {
 			StormboundIslesMod.LOGGER.warn("Failed to revive player {}: {}", victim.getName().getString(),
 					e.getMessage());
