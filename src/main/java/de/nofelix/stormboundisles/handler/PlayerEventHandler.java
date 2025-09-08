@@ -331,6 +331,8 @@ public final class PlayerEventHandler {
 		// Revive (best effort)
 		try {
 			victim.setHealth(victim.getMaxHealth());
+			victim.getHungerManager().setFoodLevel(20);
+			victim.getHungerManager().setSaturationLevel(5.0f);
 		} catch (Exception e) {
 			StormboundIslesMod.LOGGER.warn("Failed to resolve owner via getOwnerUuid on attacker: {}", e.getMessage());
 			e.printStackTrace();
