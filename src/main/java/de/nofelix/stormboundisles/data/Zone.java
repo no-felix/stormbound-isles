@@ -65,10 +65,10 @@ public final class Zone {
     public Zone(@NotNull List<BlockPos> points) {
         validatePolygonPoints(points);
         this.points = List.copyOf(points); // Immutable defensive copy
-        double tempMinX = Double.MAX_VALUE;
-        double tempMaxX = Double.MIN_VALUE;
-        double tempMinZ = Double.MAX_VALUE;
-        double tempMaxZ = Double.MIN_VALUE;
+        double tempMinX = Double.POSITIVE_INFINITY;
+        double tempMaxX = Double.NEGATIVE_INFINITY;
+        double tempMinZ = Double.POSITIVE_INFINITY;
+        double tempMaxZ = Double.NEGATIVE_INFINITY;
 
         for (BlockPos vertex : this.points) {
             double vx = getCenterX(vertex);
