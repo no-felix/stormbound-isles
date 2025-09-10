@@ -79,12 +79,17 @@ public class CommandManager {
      */
     @Initialize(priority = 1200, description = "Initialize default islands and teams")
     public static void initIslandsAndTeams() {
+        // Ensure persisted data is loaded first to avoid overwriting existing islands
+        DataManager.loadAll();
+
+        boolean modified = false;
         for (IslandType type : IslandType.values()) {
             String id = type.name().toLowerCase();
             Island island = DataManager.getIsland(id);
             if (island == null) {
                 island = new Island(id, type);
                 DataManager.putIsland(island);
+                modified = true;
             }
 
             String teamName = type.name();
@@ -92,13 +97,21 @@ public class CommandManager {
             if (team == null) {
                 team = new Team(teamName);
                 DataManager.putTeam(team);
+                modified = true;
             }
 
-            if (island.getTeamName() == null)
+            if (island.getTeamName() == null) {
                 island.setTeamName(teamName);
-            if (team.getIslandId() == null)
+                modified = true;
+            }
+            if (team.getIslandId() == null) {
                 team.setIslandId(id);
+                modified = true;
+            }
         }
-        DataManager.saveAll();
+
+        if (modified) {
+            DataManager.saveAll();
+        }
     }
 }
