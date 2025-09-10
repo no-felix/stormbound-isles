@@ -12,8 +12,9 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -56,6 +57,19 @@ public class BuffAuraHandler {
 		}
 		tickCounter = 0;
 
+		List<ServerPlayerEntity> onlinePlayers = server.getPlayerManager().getPlayerList();
+		if (onlinePlayers.isEmpty()) {
+			return;
+		}
+
+		processBuffsForOccupiedIslands(server, onlinePlayers);
+	}
+
+	/**
+	 * Processes buffs only for islands that have players on them.
+	 * Major performance improvement by skipping empty islands.
+	 */
+	private static void processBuffsForOccupiedIslands(MinecraftServer server, List<ServerPlayerEntity> onlinePlayers) {
 		long currentTime = server.getOverworld().getTimeOfDay();
 		boolean shouldLog = currentTime - lastLogTime > LOG_INTERVAL;
 		if (shouldLog) {
@@ -63,27 +77,49 @@ public class BuffAuraHandler {
 			lastLogTime = currentTime;
 		}
 
-		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-			Optional<Team> optionalTeam = DataManager.getTeams().values().stream()
-					.filter(t -> t.getMembers().contains(player.getUuid()))
-					.findFirst();
-			if (optionalTeam.isEmpty() || optionalTeam.get().getIslandId() == null) {
-				continue;
+		for (Island island : DataManager.getIslands().values()) {
+			if (island.getZone() != null) {
+				processBuffsForSingleIsland(island, onlinePlayers, shouldLog);
 			}
+		}
+	}
 
-			Island island = DataManager.getIsland(optionalTeam.get().getIslandId());
-			if (island == null || island.getZone() == null) {
-				continue;
+	/**
+	 * Processes buffs for a single island if it has players on it.
+	 */
+	private static void processBuffsForSingleIsland(Island island, List<ServerPlayerEntity> onlinePlayers,
+			boolean shouldLog) {
+		List<ServerPlayerEntity> playersOnIsland = new ArrayList<>();
+		for (ServerPlayerEntity player : onlinePlayers) {
+			if (island.getZone().contains(player.getBlockPos())) {
+				playersOnIsland.add(player);
 			}
+		}
 
-			BlockPos pos = player.getBlockPos();
-			if (island.getZone().contains(pos)) {
-				if (shouldLog) {
-					StormboundIslesMod.LOGGER.debug("Applying {} buff to {}", island.getType(),
-							player.getName().getString());
-				}
-				applyBuff(player, island.getType());
+		if (playersOnIsland.isEmpty()) {
+			return;
+		}
+
+		for (ServerPlayerEntity player : playersOnIsland) {
+			applyBuffIfPlayerOwnsIsland(player, island, shouldLog);
+		}
+	}
+
+	/**
+	 * Applies buff to a player if they are on their team's island.
+	 */
+	private static void applyBuffIfPlayerOwnsIsland(ServerPlayerEntity player, Island island, boolean shouldLog) {
+		Optional<Team> optionalTeam = DataManager.getTeams().values().stream()
+				.filter(t -> t.getMembers().contains(player.getUuid()))
+				.findFirst();
+
+		if (optionalTeam.isPresent() &&
+				island.getId().equals(optionalTeam.get().getIslandId())) {
+			if (shouldLog) {
+				StormboundIslesMod.LOGGER.debug("Applying {} buff to {}", island.getType(),
+						player.getName().getString());
 			}
+			applyBuff(player, island.getType());
 		}
 	}
 

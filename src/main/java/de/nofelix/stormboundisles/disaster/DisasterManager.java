@@ -312,16 +312,24 @@ public final class DisasterManager {
             return;
         }
 
-        // Single pass through players with combined zone check
+        List<ServerPlayerEntity> playersInZone = new ArrayList<>();
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             if (island.getZone().contains(player.getBlockPos())) {
-                if (applyEffects) {
-                    notifyPlayerOfDisaster(player, type);
-                    applyDisasterEffect(player, type, server);
-                }
-                if (sendActionbar) {
-                    ActionbarNotifier.send(player, "§cDisaster: " + type.name() + "!");
-                }
+                playersInZone.add(player);
+            }
+        }
+
+        if (playersInZone.isEmpty()) {
+            return;
+        }
+
+        for (ServerPlayerEntity player : playersInZone) {
+            if (applyEffects) {
+                notifyPlayerOfDisaster(player, type);
+                applyDisasterEffect(player, type, server);
+            }
+            if (sendActionbar) {
+                ActionbarNotifier.send(player, "§cDisaster: " + type.name() + "!");
             }
         }
     }
