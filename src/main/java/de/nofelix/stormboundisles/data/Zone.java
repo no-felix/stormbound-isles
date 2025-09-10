@@ -45,6 +45,10 @@ public final class Zone {
     // Core properties (immutable)
     @NotNull
     private final List<BlockPos> points;
+    private final double minX;
+    private final double maxX;
+    private final double minZ;
+    private final double maxZ;
 
     /**
      * Constructs a new Zone from a list of vertices.
@@ -61,6 +65,24 @@ public final class Zone {
     public Zone(@NotNull List<BlockPos> points) {
         validatePolygonPoints(points);
         this.points = List.copyOf(points); // Immutable defensive copy
+        double tempMinX = Double.MAX_VALUE;
+        double tempMaxX = Double.MIN_VALUE;
+        double tempMinZ = Double.MAX_VALUE;
+        double tempMaxZ = Double.MIN_VALUE;
+
+        for (BlockPos vertex : this.points) {
+            double vx = getCenterX(vertex);
+            double vz = getCenterZ(vertex);
+            tempMinX = Math.min(tempMinX, vx);
+            tempMaxX = Math.max(tempMaxX, vx);
+            tempMinZ = Math.min(tempMinZ, vz);
+            tempMaxZ = Math.max(tempMaxZ, vz);
+        }
+
+        this.minX = tempMinX;
+        this.maxX = tempMaxX;
+        this.minZ = tempMinZ;
+        this.maxZ = tempMaxZ;
     }
 
     // Static factory methods
@@ -137,7 +159,17 @@ public final class Zone {
     public boolean contains(@NotNull BlockPos pos) {
         validatePosition(pos);
 
-        // Check if point is exactly on polygon edge
+        // Always start with fast bounding box check
+        if (!isWithinBoundingBox(pos)) {
+            return false;
+        }
+
+        // For rectangles, bounding box check is sufficient
+        if (isRectangle()) {
+            return true;
+        }
+
+        // For complex polygons, do edge checking and ray-casting
         if (isOnPolygonEdge(pos)) {
             return true;
         }
@@ -209,6 +241,19 @@ public final class Zone {
      */
     private static double getCenterZ(@NotNull BlockPos pos) {
         return pos.getZ() + BLOCK_CENTER_OFFSET;
+    }
+
+    /**
+     * Fast bounding box check that works for all polygon types.
+     * Returns false immediately if the point is outside the polygon's bounding box,
+     * avoiding expensive operations for obviously outside points.
+     * For rectangles, this is the complete containment check.
+     */
+    private boolean isWithinBoundingBox(@NotNull BlockPos pos) {
+        double x = getCenterX(pos);
+        double z = getCenterZ(pos);
+
+        return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
     }
 
     /**
