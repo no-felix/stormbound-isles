@@ -290,6 +290,7 @@ public final class DisasterManager {
             activeDisasters.remove(key);
             disasterExpirationTimes.removeLong(key);
             lastPulseTimes.removeLong(key);
+            lastActionbarTimes.removeLong(key);
         }
     }
 
