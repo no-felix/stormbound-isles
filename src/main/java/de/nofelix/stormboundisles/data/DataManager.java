@@ -4,6 +4,12 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import net.minecraft.util.math.BlockPos;
 import de.nofelix.stormboundisles.StormboundIslesMod;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.GamePhase;
@@ -18,7 +24,9 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,6 +59,7 @@ public final class DataManager {
 
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
+            .registerTypeAdapter(Zone.class, new ZoneDeserializer())
             .create();
     private static final Logger LOGGER = StormboundIslesMod.LOGGER;
 
@@ -59,6 +68,43 @@ public final class DataManager {
     }.getType();
     private static final Type ISLAND_MAP_TYPE = new TypeToken<Map<String, Island>>() {
     }.getType();
+
+    /**
+     * Custom Gson deserializer for Zone objects.
+     * Ensures that cached bounds are properly calculated during JSON
+     * deserialization.
+     */
+    private static class ZoneDeserializer implements JsonDeserializer<Zone> {
+        @Override
+        public Zone deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) {
+            if (!json.isJsonObject()) {
+                throw new JsonParseException("Zone must be a JSON object");
+            }
+
+            JsonObject obj = json.getAsJsonObject();
+            JsonArray pointsArray = obj.getAsJsonArray("points");
+
+            if (pointsArray == null) {
+                throw new JsonParseException("Zone must have a 'points' array");
+            }
+
+            List<BlockPos> points = new ArrayList<>();
+            for (JsonElement pointElement : pointsArray) {
+                if (!pointElement.isJsonObject()) {
+                    throw new JsonParseException("Each point must be a JSON object");
+                }
+
+                JsonObject point = pointElement.getAsJsonObject();
+                int x = point.get("x").getAsInt();
+                int y = point.get("y").getAsInt();
+                int z = point.get("z").getAsInt();
+                points.add(new BlockPos(x, y, z));
+            }
+
+            // Create new Zone through constructor, which will properly calculate bounds
+            return new Zone(points);
+        }
+    }
 
     // Data storage - Using ConcurrentHashMap for thread safety
     private static final Map<String, Team> teams = new ConcurrentHashMap<>();
