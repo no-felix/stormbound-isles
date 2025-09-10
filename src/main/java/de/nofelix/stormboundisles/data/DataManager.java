@@ -9,6 +9,8 @@ import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonSerializer;
+import com.google.gson.JsonSerializationContext;
 import net.minecraft.util.math.BlockPos;
 import de.nofelix.stormboundisles.StormboundIslesMod;
 import de.nofelix.stormboundisles.game.GameManager;
@@ -59,6 +61,7 @@ public final class DataManager {
 
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
+            .registerTypeAdapter(Zone.class, new ZoneSerializer())
             .registerTypeAdapter(Zone.class, new ZoneDeserializer())
             .create();
     private static final Logger LOGGER = StormboundIslesMod.LOGGER;
@@ -70,9 +73,34 @@ public final class DataManager {
     }.getType();
 
     /**
+     * Custom Gson serializer for Zone objects.
+     * Always serializes BlockPos coordinates with readable field names (x, y, z)
+     * instead of obfuscated field names.
+     */
+    private static class ZoneSerializer implements JsonSerializer<Zone> {
+        @Override
+        public JsonElement serialize(Zone zone, Type typeOfT, JsonSerializationContext context) {
+            JsonObject obj = new JsonObject();
+            JsonArray pointsArray = new JsonArray();
+
+            for (BlockPos point : zone.getPoints()) {
+                JsonObject pointObj = new JsonObject();
+                pointObj.addProperty("x", point.getX());
+                pointObj.addProperty("y", point.getY());
+                pointObj.addProperty("z", point.getZ());
+                pointsArray.add(pointObj);
+            }
+
+            obj.add("points", pointsArray);
+            return obj;
+        }
+    }
+
+    /**
      * Custom Gson deserializer for Zone objects.
      * Ensures that cached bounds are properly calculated during JSON
-     * deserialization.
+     * deserialization. Supports both normal field names (x, y, z) and
+     * obfuscated field names (field_11175, field_11174, field_11173).
      */
     private static class ZoneDeserializer implements JsonDeserializer<Zone> {
         @Override
@@ -95,9 +123,25 @@ public final class DataManager {
                 }
 
                 JsonObject point = pointElement.getAsJsonObject();
-                int x = point.get("x").getAsInt();
-                int y = point.get("y").getAsInt();
-                int z = point.get("z").getAsInt();
+
+                // Try to read coordinates, supporting both normal and obfuscated field names
+                int x, y, z;
+                try {
+                    // First try normal field names
+                    if (point.has("x") && point.has("y") && point.has("z")) {
+                        x = point.get("x").getAsInt();
+                        y = point.get("y").getAsInt();
+                        z = point.get("z").getAsInt();
+                    } else {
+                        // Fall back to obfuscated field names
+                        x = point.get("field_11175").getAsInt(); // obfuscated x
+                        y = point.get("field_11174").getAsInt(); // obfuscated y
+                        z = point.get("field_11173").getAsInt(); // obfuscated z
+                    }
+                } catch (Exception e) {
+                    throw new JsonParseException("Point must have valid x, y, z coordinates", e);
+                }
+
                 points.add(new BlockPos(x, y, z));
             }
 
