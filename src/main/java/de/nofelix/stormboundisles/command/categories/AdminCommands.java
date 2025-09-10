@@ -87,6 +87,25 @@ public class AdminCommands implements CommandCategory {
         // Add game subcategory to admin category
         adminCommand.then(gameCommand);
 
+        // Admin config reload command
+        adminCommand.then(CommandManager.literal("reload")
+                .then(CommandManager.literal("config")
+                        .executes(ctx -> {
+                            try {
+                                ConfigManager.loadConfig();
+                                ctx.getSource().sendFeedback(
+                                        () -> Text.literal("Configuration reloaded successfully.")
+                                                .formatted(Formatting.GREEN),
+                                        false);
+                                return 1;
+                            } catch (Exception e) {
+                                ctx.getSource().sendError(
+                                        Text.literal("Failed to reload configuration: " + e.getMessage())
+                                                .formatted(Formatting.RED));
+                                return 0;
+                            }
+                        })));
+
         // Admin reset command
         adminCommand.then(CommandManager.literal("reset")
                 .executes(ctx -> {
