@@ -8,6 +8,7 @@ import de.nofelix.stormboundisles.command.util.CommandSuggestions;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.game.GameManager;
+import de.nofelix.stormboundisles.game.DailyRewardManager;
 import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.util.Constants;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -104,6 +105,28 @@ public class AdminCommands implements CommandCategory {
                                                 .formatted(Formatting.RED));
                                 return 0;
                             }
+                        })));
+
+        // Admin daily reward debug command
+        adminCommand.then(CommandManager.literal("debug")
+                .then(CommandManager.literal("daily")
+                        .executes(ctx -> {
+                            Map<String, Object> debugInfo = DailyRewardManager.getDebugInfo();
+                            
+                            ctx.getSource().sendFeedback(
+                                    () -> Text.literal("=== Daily Reward System Debug ===")
+                                            .formatted(Formatting.GOLD),
+                                    false);
+                                    
+                            for (Map.Entry<String, Object> entry : debugInfo.entrySet()) {
+                                ctx.getSource().sendFeedback(
+                                        () -> Text.literal(String.format("  %s: %s", 
+                                                entry.getKey(), entry.getValue()))
+                                                .formatted(Formatting.WHITE),
+                                        false);
+                            }
+                            
+                            return 1;
                         })));
 
         // Admin reset command
