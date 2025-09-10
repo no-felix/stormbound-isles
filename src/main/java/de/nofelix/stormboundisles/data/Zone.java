@@ -164,12 +164,7 @@ public final class Zone {
             return false;
         }
 
-        // For rectangles, bounding box check is sufficient
-        if (isRectangle()) {
-            return true;
-        }
-
-        // For complex polygons, do edge checking and ray-casting
+        // Check if point is exactly on polygon edge
         if (isOnPolygonEdge(pos)) {
             return true;
         }
@@ -367,30 +362,30 @@ public final class Zone {
     // Additional utility methods for 2D bounds
 
     /**
-     * Gets the minimum X coordinate among all vertices.
+     * Gets the minimum X coordinate among all vertices (block centers).
      */
     private int getMinX() {
-        return points.stream().mapToInt(BlockPos::getX).min().orElse(0);
+        return (int) Math.floor(minX);
     }
 
     /**
-     * Gets the maximum X coordinate among all vertices.
+     * Gets the maximum X coordinate among all vertices (block centers).
      */
     private int getMaxX() {
-        return points.stream().mapToInt(BlockPos::getX).max().orElse(0);
+        return (int) Math.floor(maxX);
     }
 
     /**
-     * Gets the minimum Z coordinate among all vertices.
+     * Gets the minimum Z coordinate among all vertices (block centers).
      */
     private int getMinZ() {
-        return points.stream().mapToInt(BlockPos::getZ).min().orElse(0);
+        return (int) Math.floor(minZ);
     }
 
     /**
-     * Gets the maximum Z coordinate among all vertices.
+     * Gets the maximum Z coordinate among all vertices (block centers).
      */
     private int getMaxZ() {
-        return points.stream().mapToInt(BlockPos::getZ).max().orElse(0);
+        return (int) Math.floor(maxZ);
     }
 }
