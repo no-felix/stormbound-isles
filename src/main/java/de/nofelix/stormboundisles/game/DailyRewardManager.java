@@ -54,6 +54,7 @@ public final class DailyRewardManager {
         private volatile long sessionStartTime = 0;
         private volatile boolean diedToday = false;
         private volatile boolean isOnline = false;
+        private volatile boolean oneHourMessageSent = false; // Track if 1-hour message was sent
         private final Object sessionLock = new Object();
 
         /**
@@ -107,6 +108,7 @@ public final class DailyRewardManager {
                 }
                 totalOnlineTimeMs.set(0);
                 diedToday = false;
+                oneHourMessageSent = false; // Reset 1-hour message flag for new day
             }
         }
 
@@ -176,6 +178,9 @@ public final class DailyRewardManager {
     private static void onServerTick(MinecraftServer server) {
         long currentTime = System.currentTimeMillis();
 
+        // Check for 1-hour milestone messages
+        checkOneHourMilestones(server);
+
         // Only check for day change once per minute to reduce overhead
         if (currentTime - lastMidnightCheck.get() > 60000L) { // 60 seconds
             lastMidnightCheck.set(currentTime);
@@ -192,6 +197,36 @@ public final class DailyRewardManager {
         if (currentTime - lastCleanup > CLEANUP_INTERVAL_MS) {
             cleanupStaleData();
             lastCleanup = currentTime;
+        }
+    }
+
+    /**
+     * Checks if any online players have reached the 1-hour milestone and sends them a message.
+     */
+    private static void checkOneHourMilestones(MinecraftServer server) {
+        final long ONE_HOUR_MS = 3_600_000L; // 1 hour in milliseconds
+
+        for (Map.Entry<UUID, PlayerDailyData> entry : playerData.entrySet()) {
+            UUID playerId = entry.getKey();
+            PlayerDailyData data = entry.getValue();
+
+            // Only check online players who haven't received the message yet
+            if (data.isOnline && !data.oneHourMessageSent) {
+                long totalTime = data.getTotalOnlineTimeMs();
+
+                if (totalTime >= ONE_HOUR_MS) {
+                    // Mark message as sent
+                    data.oneHourMessageSent = true;
+
+                    // Send message to player
+                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerId);
+                    if (player != null) {
+                        String message = "§6🎉 Congratulations! §fYou've reached §e1 hour §f of playtime today!";
+                        player.sendMessage(Text.literal(message), false);
+                        LOGGER.debug("Sent 1-hour milestone message to player {}", player.getName().getString());
+                    }
+                }
+            }
         }
     }
 
