@@ -143,7 +143,7 @@ public final class DisasterManager {
 
         // Broadcast and apply effects
         broadcastDisasterAlert(server, islandId, type);
-        applyDisasterToPlayersOnIsland(server, island, type);
+        applyDisasterToPlayersOnIsland(server, island, type, true, false);
 
         // Record initial pulse and actionbar times
         lastPulseTimes.put(disasterKey, System.currentTimeMillis());
@@ -295,13 +295,32 @@ public final class DisasterManager {
 
     /**
      * Applies disaster effects to all players on an island.
+     * Combines effect application and actionbar notifications to minimize zone
+     * containment checks.
+     * 
+     * @param server        The server instance
+     * @param island        The island where the disaster is active
+     * @param type          The type of disaster
+     * @param applyEffects  Whether to apply disaster effects to players
+     * @param sendActionbar Whether to send actionbar notifications to players
      */
     private static void applyDisasterToPlayersOnIsland(@NotNull MinecraftServer server,
-            @NotNull Island island, @NotNull DisasterType type) {
+            @NotNull Island island, @NotNull DisasterType type, boolean applyEffects, boolean sendActionbar) {
+        // Early exit if no actions needed
+        if (!applyEffects && !sendActionbar) {
+            return;
+        }
+
+        // Single pass through players with combined zone check
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             if (island.getZone().contains(player.getBlockPos())) {
-                notifyPlayerOfDisaster(player, type);
-                applyDisasterEffect(player, type, server);
+                if (applyEffects) {
+                    notifyPlayerOfDisaster(player, type);
+                    applyDisasterEffect(player, type, server);
+                }
+                if (sendActionbar) {
+                    ActionbarNotifier.send(player, "§cDisaster: " + type.name() + "!");
+                }
             }
         }
     }
@@ -486,59 +505,91 @@ public final class DisasterManager {
         // Check for expired disasters and notify players
         checkExpiredDisasters(server);
 
-        // Reapply pulses for active disasters if pulse interval elapsed
-        long now = System.currentTimeMillis();
-        long pulseIntervalMs = ConfigManager.getDisasterPulseIntervalTicks() * MILLISECONDS_PER_TICK;
-        long actionbarIntervalMs = ConfigManager.getDisasterActionbarIntervalTicks() * MILLISECONDS_PER_TICK;
-        for (String key : new HashSet<>(activeDisasters)) {
-            long last = lastPulseTimes.getLong(key);
-            if (last == 0L) {
-                // First pulse was applied at trigger time; record now
-                lastPulseTimes.put(key, now);
-                continue;
-            }
-
-            if (now - last >= pulseIntervalMs) {
-                // Reapply the disaster effect to players on the island
-                String[] parts = key.split(DISASTER_KEY_SEPARATOR);
-                if (parts.length == 2) {
-                    String islandId = parts[0];
-                    DisasterType type = DisasterType.valueOf(parts[1]);
-                    Island island = DataManager.getIsland(islandId);
-                    if (island != null && island.getZone() != null) {
-                        applyDisasterToPlayersOnIsland(server, island, type);
-                    }
-                }
-                lastPulseTimes.put(key, now);
-            }
-
-            // Resend actionbar separately and more frequently if configured
-            long lastAction = lastActionbarTimes.getLong(key);
-            if (lastAction == 0L) {
-                lastActionbarTimes.put(key, now);
-            } else if (now - lastAction >= actionbarIntervalMs) {
-                String[] parts = key.split(DISASTER_KEY_SEPARATOR);
-                if (parts.length == 2) {
-                    String islandId = parts[0];
-                    Island island = DataManager.getIsland(islandId);
-                    if (island != null && island.getZone() != null) {
-                        // Notify players again via actionbar
-                        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                            if (island.getZone().contains(player.getBlockPos())) {
-                                ActionbarNotifier.send(player, "§cDisaster: " + parts[1] + "!");
-                            }
-                        }
-                    }
-                }
-                lastActionbarTimes.put(key, now);
-            }
-        }
+        // Process active disasters for effects and notifications
+        processActiveDisasters(server);
 
         // Periodic random disaster triggering
         tickCounter++;
         if (tickCounter >= ConfigManager.getDisasterIntervalTicks()) {
             tickCounter = 0;
             triggerRandomDisaster(server);
+        }
+    }
+
+    /**
+     * Processes all active disasters for pulse effects and actionbar notifications.
+     * Optimized to minimize redundant zone containment checks.
+     */
+    private static void processActiveDisasters(@NotNull MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        long pulseIntervalMs = ConfigManager.getDisasterPulseIntervalTicks() * MILLISECONDS_PER_TICK;
+        long actionbarIntervalMs = ConfigManager.getDisasterActionbarIntervalTicks() * MILLISECONDS_PER_TICK;
+
+        // Early exit if no players online to avoid unnecessary processing
+        List<ServerPlayerEntity> allPlayers = server.getPlayerManager().getPlayerList();
+        if (allPlayers.isEmpty()) {
+            return;
+        }
+
+        for (String key : new HashSet<>(activeDisasters)) {
+            processDisasterKey(server, key, now, pulseIntervalMs, actionbarIntervalMs);
+        }
+    }
+
+    /**
+     * Processes a single disaster key for effects and notifications.
+     */
+    private static void processDisasterKey(@NotNull MinecraftServer server, @NotNull String key,
+            long now, long pulseIntervalMs, long actionbarIntervalMs) {
+
+        long lastPulse = lastPulseTimes.getLong(key);
+        long lastAction = lastActionbarTimes.getLong(key);
+
+        // Parse disaster key
+        String[] parts = key.split(DISASTER_KEY_SEPARATOR);
+        if (parts.length != 2) {
+            return;
+        }
+
+        String islandId = parts[0];
+        DisasterType type;
+        try {
+            type = DisasterType.valueOf(parts[1]);
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Invalid disaster type in key: {}", key);
+            return;
+        }
+
+        Island island = DataManager.getIsland(islandId);
+        if (island == null || island.getZone() == null) {
+            return;
+        }
+
+        // Initialize timing if needed
+        if (lastPulse == 0L) {
+            lastPulseTimes.put(key, now);
+            lastPulse = now;
+        }
+        if (lastAction == 0L) {
+            lastActionbarTimes.put(key, now);
+            lastAction = now;
+        }
+
+        // Check if any action is needed for this disaster
+        boolean needsPulse = (now - lastPulse) >= pulseIntervalMs;
+        boolean needsActionbar = (now - lastAction) >= actionbarIntervalMs;
+
+        if (needsPulse || needsActionbar) {
+            // Single optimized loop through players to avoid redundant zone checks
+            applyDisasterToPlayersOnIsland(server, island, type, needsPulse, needsActionbar);
+
+            // Update timing
+            if (needsPulse) {
+                lastPulseTimes.put(key, now);
+            }
+            if (needsActionbar) {
+                lastActionbarTimes.put(key, now);
+            }
         }
     }
 
