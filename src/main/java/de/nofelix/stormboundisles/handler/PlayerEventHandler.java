@@ -219,7 +219,8 @@ public final class PlayerEventHandler {
 		BlockPos above = target.up();
 		BlockPos below = target.down();
 
-		// Destination and one block above must be air, block below must exist and not be liquid
+		// Destination and one block above must be air, block below must exist and not
+		// be liquid
 		return world.getBlockState(target).isAir() && world.getBlockState(above).isAir() &&
 				!world.getBlockState(below).isAir() && world.getFluidState(below).isEmpty();
 	}
@@ -337,6 +338,11 @@ public final class PlayerEventHandler {
 			targetZ = bedPos.getZ() + 0.5;
 			if (isSafeTeleport(world, targetX, targetY, targetZ)) {
 				hasValidSpawn = true;
+			} else {
+				victim.sendMessage(
+						Text.literal("§6⚠ Your bed spawn is occupied or unsafe! Using island spawn instead."), false);
+				StormboundIslesMod.LOGGER.debug("Player {} bed spawn at {} is not safe, falling back to island spawn",
+						victim.getName().getString(), bedPos);
 			}
 		}
 
