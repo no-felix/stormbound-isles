@@ -30,6 +30,7 @@ import net.minecraft.util.Formatting;
 import net.minecraft.block.BedBlock;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.world.GameMode;
 
 /**
  * Handles player-related events: death penalties and boundary enforcement
@@ -361,6 +362,7 @@ public final class PlayerEventHandler {
 
 		// Revive (best effort)
 		try {
+			victim.changeGameMode(GameMode.SURVIVAL);
 			victim.setHealth(victim.getMaxHealth());
 			victim.getHungerManager().setFoodLevel(20);
 			victim.getHungerManager().setSaturationLevel(5.0f);
