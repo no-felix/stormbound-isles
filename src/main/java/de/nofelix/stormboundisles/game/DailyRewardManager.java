@@ -201,7 +201,8 @@ public final class DailyRewardManager {
     }
 
     /**
-     * Checks if any online players have reached the 1-hour milestone and sends them a message.
+     * Checks if any online players have reached the 1-hour milestone and sends them
+     * a message.
      */
     private static void checkOneHourMilestones(MinecraftServer server) {
         final long ONE_HOUR_MS = 3_600_000L; // 1 hour in milliseconds
@@ -231,11 +232,89 @@ public final class DailyRewardManager {
     }
 
     /**
+     * Broadcasts player session times to all players in chat.
+     */
+    private static void broadcastPlayerSessionTimes(MinecraftServer server) {
+        try {
+            // Send header message
+            server.getPlayerManager().broadcast(Text.literal("§6§l=== DAILY SESSION SUMMARY ==="), false);
+
+            // Group players by team
+            Map<String, List<Map.Entry<UUID, PlayerDailyData>>> playersByTeam = new HashMap<>();
+
+            for (Map.Entry<UUID, PlayerDailyData> entry : playerData.entrySet()) {
+                UUID playerId = entry.getKey();
+                String teamName = findPlayerTeam(playerId);
+                playersByTeam.computeIfAbsent(teamName, k -> new ArrayList<>()).add(entry);
+            }
+
+            // Display each team's players
+            playersByTeam.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> displayTeamPlayers(server, entry.getKey(), entry.getValue()));
+
+            // Send footer
+            server.getPlayerManager().broadcast(Text.literal("§6§l============================"), false);
+
+        } catch (Exception e) {
+            LOGGER.error("Error broadcasting player session times", e);
+        }
+    }
+
+    /**
+     * Finds which team a player belongs to.
+     */
+    private static String findPlayerTeam(UUID playerId) {
+        for (Team team : DataManager.getTeams().values()) {
+            if (team.getMembers().contains(playerId)) {
+                return team.getName();
+            }
+        }
+        return "No Team";
+    }
+
+    /**
+     * Displays all players for a specific team.
+     */
+    private static void displayTeamPlayers(MinecraftServer server, String teamName,
+            List<Map.Entry<UUID, PlayerDailyData>> teamPlayers) {
+        // Send team header
+        server.getPlayerManager().broadcast(Text.literal(String.format("§e§lTeam %s:", teamName)), false);
+
+        // Sort and display players
+        teamPlayers.stream()
+                .sorted((a, b) -> Long.compare(b.getValue().getTotalOnlineTimeMs(),
+                        a.getValue().getTotalOnlineTimeMs()))
+                .forEach(entry -> displayPlayerTime(server, entry.getKey(), entry.getValue()));
+    }
+
+    /**
+     * Displays a single player's session time.
+     */
+    private static void displayPlayerTime(MinecraftServer server, UUID playerId, PlayerDailyData data) {
+        ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerId);
+        String playerName = player != null ? player.getName().getString() : "Unknown";
+
+        long totalMs = data.getTotalOnlineTimeMs();
+        long hours = totalMs / (1000 * 60 * 60);
+        long minutes = (totalMs / (1000 * 60)) % 60;
+        String timeString = hours > 0 ? String.format("%dh %dm", hours, minutes) : String.format("%dm", minutes);
+
+        String status = data.isOnline ? "§a●" : "§7●";
+        String playerInfo = String.format("  %s §f%s §7- §e%s", status, playerName, timeString);
+
+        server.getPlayerManager().broadcast(Text.literal(playerInfo), false);
+    }
+
+    /**
      * Processes daily rewards when midnight occurs.
      */
     private static void processDailyRewards(MinecraftServer server) {
         try {
             LOGGER.info("Processing daily survival/no-death rewards");
+
+            // Broadcast player session times before processing rewards
+            broadcastPlayerSessionTimes(server);
 
             // Calculate rewards for each team
             Map<String, Team> teams = DataManager.getTeams();
