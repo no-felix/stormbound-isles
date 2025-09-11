@@ -1,6 +1,7 @@
 package de.nofelix.stormboundisles.disaster;
 
 import de.nofelix.stormboundisles.StormboundIslesMod;
+import de.nofelix.stormboundisles.util.AsyncOperationManager;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
@@ -296,9 +297,8 @@ public final class DisasterManager {
 
     /**
      * Applies disaster effects to all players on an island.
-     * Combines effect application and actionbar notifications to minimize zone
-     * containment checks.
-     * 
+     * Uses async processing for expensive zone containment checks.
+     *
      * @param server        The server instance
      * @param island        The island where the disaster is active
      * @param type          The type of disaster
@@ -312,25 +312,52 @@ public final class DisasterManager {
             return;
         }
 
-        List<ServerPlayerEntity> playersInZone = new ArrayList<>();
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (island.getZone().contains(player.getBlockPos())) {
-                playersInZone.add(player);
-            }
-        }
+        // Use async operation for expensive zone containment checks
+        AsyncOperationManager.submitAsync(
+                () -> {
+                    // Perform expensive raycasting checks in background thread
+                    List<ServerPlayerEntity> playersInZone = new ArrayList<>();
+                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                        if (island.getZone().contains(player.getBlockPos())) {
+                            playersInZone.add(player);
+                        }
+                    }
+                    return new DisasterApplicationData(playersInZone, type, applyEffects, sendActionbar);
+                },
+                data -> {
+                    // This callback runs on main thread - safe to apply effects and send messages
+                    if (data.playersInZone.isEmpty()) {
+                        return;
+                    }
 
-        if (playersInZone.isEmpty()) {
-            return;
-        }
+                    for (ServerPlayerEntity player : data.playersInZone) {
+                        if (data.applyEffects) {
+                            notifyPlayerOfDisaster(player, data.type);
+                            applyDisasterEffect(player, data.type, server);
+                        }
+                        if (data.sendActionbar) {
+                            ActionbarNotifier.send(player, "§cDisaster: " + data.type.name() + "!");
+                        }
+                    }
+                },
+                error -> LOGGER.error("Error applying disaster effects for island {}", island.getId(), error));
+    }
 
-        for (ServerPlayerEntity player : playersInZone) {
-            if (applyEffects) {
-                notifyPlayerOfDisaster(player, type);
-                applyDisasterEffect(player, type, server);
-            }
-            if (sendActionbar) {
-                ActionbarNotifier.send(player, "§cDisaster: " + type.name() + "!");
-            }
+    /**
+     * Data container for disaster application results.
+     */
+    private static class DisasterApplicationData {
+        final List<ServerPlayerEntity> playersInZone;
+        final DisasterType type;
+        final boolean applyEffects;
+        final boolean sendActionbar;
+
+        DisasterApplicationData(List<ServerPlayerEntity> playersInZone, DisasterType type,
+                boolean applyEffects, boolean sendActionbar) {
+            this.playersInZone = playersInZone;
+            this.type = type;
+            this.applyEffects = applyEffects;
+            this.sendActionbar = sendActionbar;
         }
     }
 

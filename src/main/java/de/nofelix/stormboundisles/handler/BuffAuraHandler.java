@@ -1,6 +1,7 @@
 package de.nofelix.stormboundisles.handler;
 
 import de.nofelix.stormboundisles.StormboundIslesMod;
+import de.nofelix.stormboundisles.util.AsyncOperationManager;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
@@ -86,23 +87,34 @@ public class BuffAuraHandler {
 
 	/**
 	 * Processes buffs for a single island if it has players on it.
+	 * Uses async processing for expensive zone containment checks.
 	 */
 	private static void processBuffsForSingleIsland(Island island, List<ServerPlayerEntity> onlinePlayers,
 			boolean shouldLog) {
-		List<ServerPlayerEntity> playersOnIsland = new ArrayList<>();
-		for (ServerPlayerEntity player : onlinePlayers) {
-			if (island.getZone().contains(player.getBlockPos())) {
-				playersOnIsland.add(player);
-			}
-		}
+		// Use async operation for expensive zone containment checks
+		AsyncOperationManager.submitAsync(
+				() -> {
+					// Perform expensive raycasting checks in background thread
+					List<ServerPlayerEntity> playersOnIsland = new ArrayList<>();
+					for (ServerPlayerEntity player : onlinePlayers) {
+						if (island.getZone().contains(player.getBlockPos())) {
+							playersOnIsland.add(player);
+						}
+					}
+					return playersOnIsland;
+				},
+				playersOnIsland -> {
+					// This callback runs on main thread - safe to apply buffs
+					if (playersOnIsland.isEmpty()) {
+						return;
+					}
 
-		if (playersOnIsland.isEmpty()) {
-			return;
-		}
-
-		for (ServerPlayerEntity player : playersOnIsland) {
-			applyBuffIfPlayerOwnsIsland(player, island, shouldLog);
-		}
+					for (ServerPlayerEntity player : playersOnIsland) {
+						applyBuffIfPlayerOwnsIsland(player, island, shouldLog);
+					}
+				},
+				error -> StormboundIslesMod.LOGGER.error("Error processing buffs for island {}", island.getId(),
+						error));
 	}
 
 	/**
