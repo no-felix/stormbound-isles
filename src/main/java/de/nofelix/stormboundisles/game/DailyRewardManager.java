@@ -5,8 +5,14 @@ import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Team;
 import de.nofelix.stormboundisles.init.Initialize;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.world.PersistentState;
+import net.minecraft.world.PersistentStateManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -28,6 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * - Death tracking per day
  * - Midnight reward calculation and distribution
  * - Automatic cleanup of stale data
+ * - Persistent storage to survive server restarts
  */
 public final class DailyRewardManager {
 
@@ -44,6 +51,153 @@ public final class DailyRewardManager {
 
     private static final long CLEANUP_INTERVAL_MS = 60 * 60 * 1000L; // 1 hour
     private static volatile long lastCleanup = 0;
+
+    // Persistence
+    private static DailyRewardState persistentState;
+
+    // NBT Keys
+    private static final String NBT_CURRENT_DAY = "currentDay";
+    private static final String NBT_LAST_MIDNIGHT_CHECK = "lastMidnightCheck";
+    private static final String NBT_PLAYER_DATA = "playerData";
+    private static final String NBT_TEAM_DEATH_COUNT = "teamDeathCount";
+    private static final String NBT_APPLIED_POINTS_TODAY = "appliedPointsToday";
+    private static final String NBT_PLAYER_ID = "playerId";
+    private static final String NBT_TOTAL_ONLINE_TIME_MS = "totalOnlineTimeMs";
+    private static final String NBT_SESSION_START_TIME = "sessionStartTime";
+    private static final String NBT_DIED_TODAY = "diedToday";
+    private static final String NBT_IS_ONLINE = "isOnline";
+    private static final String NBT_ONE_HOUR_MESSAGE_SENT = "oneHourMessageSent";
+
+    /**
+     * Persistent state for daily reward data
+     */
+    private static class DailyRewardState extends PersistentState {
+        private final Map<UUID, PlayerDailyData> savedPlayerData = new ConcurrentHashMap<>();
+        private final Map<String, AtomicInteger> savedTeamDeathCount = new ConcurrentHashMap<>();
+        private final Map<String, AtomicInteger> savedAppliedPointsToday = new ConcurrentHashMap<>();
+        private LocalDate savedCurrentDay;
+        private long savedLastMidnightCheck;
+
+        public static DailyRewardState create() {
+            return new DailyRewardState();
+        }
+
+        public static DailyRewardState fromNbt(NbtCompound nbt) {
+            DailyRewardState state = new DailyRewardState();
+
+            // Load current day
+            if (nbt.contains(NBT_CURRENT_DAY)) {
+                state.savedCurrentDay = LocalDate.parse(nbt.getString(NBT_CURRENT_DAY));
+            }
+
+            // Load last midnight check
+            state.savedLastMidnightCheck = nbt.getLong(NBT_LAST_MIDNIGHT_CHECK);
+
+            // Load player data
+            if (nbt.contains(NBT_PLAYER_DATA)) {
+                NbtList playerList = nbt.getList(NBT_PLAYER_DATA, NbtElement.COMPOUND_TYPE);
+                for (int i = 0; i < playerList.size(); i++) {
+                    NbtCompound playerNbt = playerList.getCompound(i);
+                    UUID playerId = playerNbt.getUuid(NBT_PLAYER_ID);
+
+                    PlayerDailyData data = new PlayerDailyData();
+                    data.totalOnlineTimeMs.set(playerNbt.getLong(NBT_TOTAL_ONLINE_TIME_MS));
+                    data.sessionStartTime = playerNbt.getLong(NBT_SESSION_START_TIME);
+                    data.diedToday = playerNbt.getBoolean(NBT_DIED_TODAY);
+                    data.isOnline = playerNbt.getBoolean(NBT_IS_ONLINE);
+                    data.oneHourMessageSent = playerNbt.getBoolean(NBT_ONE_HOUR_MESSAGE_SENT);
+
+                    state.savedPlayerData.put(playerId, data);
+                }
+            }
+
+            // Load team death count
+            if (nbt.contains(NBT_TEAM_DEATH_COUNT)) {
+                NbtCompound teamDeathsNbt = nbt.getCompound(NBT_TEAM_DEATH_COUNT);
+                for (String teamName : teamDeathsNbt.getKeys()) {
+                    state.savedTeamDeathCount.put(teamName, new AtomicInteger(teamDeathsNbt.getInt(teamName)));
+                }
+            }
+
+            // Load applied points today
+            if (nbt.contains(NBT_APPLIED_POINTS_TODAY)) {
+                NbtCompound appliedPointsNbt = nbt.getCompound(NBT_APPLIED_POINTS_TODAY);
+                for (String teamName : appliedPointsNbt.getKeys()) {
+                    state.savedAppliedPointsToday.put(teamName, new AtomicInteger(appliedPointsNbt.getInt(teamName)));
+                }
+            }
+
+            return state;
+        }
+
+        @Override
+        public NbtCompound writeNbt(NbtCompound nbt) {
+            // Save current day
+            if (savedCurrentDay != null) {
+                nbt.putString(NBT_CURRENT_DAY, savedCurrentDay.toString());
+            }
+
+            // Save last midnight check
+            nbt.putLong(NBT_LAST_MIDNIGHT_CHECK, savedLastMidnightCheck);
+
+            // Save player data
+            NbtList playerList = new NbtList();
+            for (Map.Entry<UUID, PlayerDailyData> entry : savedPlayerData.entrySet()) {
+                NbtCompound playerNbt = new NbtCompound();
+                playerNbt.putUuid(NBT_PLAYER_ID, entry.getKey());
+
+                PlayerDailyData data = entry.getValue();
+                playerNbt.putLong(NBT_TOTAL_ONLINE_TIME_MS, data.totalOnlineTimeMs.get());
+                playerNbt.putLong(NBT_SESSION_START_TIME, data.sessionStartTime);
+                playerNbt.putBoolean(NBT_DIED_TODAY, data.diedToday);
+                playerNbt.putBoolean(NBT_IS_ONLINE, data.isOnline);
+                playerNbt.putBoolean(NBT_ONE_HOUR_MESSAGE_SENT, data.oneHourMessageSent);
+
+                playerList.add(playerNbt);
+            }
+            nbt.put(NBT_PLAYER_DATA, playerList);
+
+            // Save team death count
+            NbtCompound teamDeathsNbt = new NbtCompound();
+            for (Map.Entry<String, AtomicInteger> entry : savedTeamDeathCount.entrySet()) {
+                teamDeathsNbt.putInt(entry.getKey(), entry.getValue().get());
+            }
+            nbt.put(NBT_TEAM_DEATH_COUNT, teamDeathsNbt);
+
+            // Save applied points today
+            NbtCompound appliedPointsNbt = new NbtCompound();
+            for (Map.Entry<String, AtomicInteger> entry : savedAppliedPointsToday.entrySet()) {
+                appliedPointsNbt.putInt(entry.getKey(), entry.getValue().get());
+            }
+            nbt.put(NBT_APPLIED_POINTS_TODAY, appliedPointsNbt);
+
+            return nbt;
+        }
+
+        public void updateFromCurrentState() {
+            this.savedPlayerData.clear();
+            this.savedPlayerData.putAll(playerData);
+            this.savedTeamDeathCount.clear();
+            this.savedTeamDeathCount.putAll(teamDeathCount);
+            this.savedAppliedPointsToday.clear();
+            this.savedAppliedPointsToday.putAll(appliedPointsToday);
+            this.savedCurrentDay = currentDay;
+            this.savedLastMidnightCheck = lastMidnightCheck.get();
+        }
+
+        public static void loadToCurrentState(DailyRewardState state) {
+            if (state != null) {
+                playerData.clear();
+                playerData.putAll(state.savedPlayerData);
+                teamDeathCount.clear();
+                teamDeathCount.putAll(state.savedTeamDeathCount);
+                appliedPointsToday.clear();
+                appliedPointsToday.putAll(state.savedAppliedPointsToday);
+                currentDay = state.savedCurrentDay;
+                lastMidnightCheck.set(state.savedLastMidnightCheck);
+            }
+        }
+    }
 
     /**
      * Represents a player's daily activity data.
@@ -136,8 +290,18 @@ public final class DailyRewardManager {
     public static void initialize() {
         LOGGER.info("Initializing DailyRewardManager");
 
-        currentDay = LocalDate.now();
-        lastMidnightCheck.set(System.currentTimeMillis());
+        // Load persistent state
+        loadPersistentState();
+
+        // Initialize current day if not loaded
+        if (currentDay == null) {
+            currentDay = LocalDate.now();
+        }
+
+        // Initialize last midnight check if not loaded
+        if (lastMidnightCheck.get() == 0) {
+            lastMidnightCheck.set(System.currentTimeMillis());
+        }
 
         // Register player join/leave events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -157,6 +321,61 @@ public final class DailyRewardManager {
 
         // Register server tick for midnight checks
         ServerTickEvents.END_SERVER_TICK.register(DailyRewardManager::onServerTick);
+
+        // Register server shutdown to save data
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            LOGGER.info("Server stopping, saving daily reward data...");
+            savePersistentState();
+        });
+
+        LOGGER.info("DailyRewardManager initialized successfully");
+    }
+
+    /**
+     * Loads the persistent state from disk.
+     */
+    private static void loadPersistentState() {
+        try {
+            // This will be called during server initialization
+            // We'll load the state when the server is available
+            LOGGER.debug("Persistent state will be loaded when server is available");
+        } catch (Exception e) {
+            LOGGER.error("Failed to load persistent state", e);
+        }
+    }
+
+    /**
+     * Loads persistent state using the server's persistent state manager.
+     */
+    public static void loadPersistentState(MinecraftServer server) {
+        try {
+            // Get the overworld's persistent state manager
+            PersistentStateManager stateManager = server.getOverworld().getPersistentStateManager();
+            persistentState = stateManager.getOrCreate(DailyRewardState::fromNbt, DailyRewardState::create,
+                    "daily_rewards");
+
+            // Load the saved data into current state
+            DailyRewardState.loadToCurrentState(persistentState);
+
+            LOGGER.info("Daily reward persistent state loaded successfully");
+        } catch (Exception e) {
+            LOGGER.error("Failed to load persistent state from server", e);
+        }
+    }
+
+    /**
+     * Saves the current state to persistent storage.
+     */
+    private static void savePersistentState() {
+        try {
+            if (persistentState != null) {
+                persistentState.updateFromCurrentState();
+                persistentState.markDirty();
+                LOGGER.debug("Daily reward state saved to disk");
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to save persistent state", e);
+        }
     }
 
     /**
@@ -170,6 +389,9 @@ public final class DailyRewardManager {
         data.markDeath();
 
         teamDeathCount.computeIfAbsent(teamName, k -> new AtomicInteger(0)).incrementAndGet();
+
+        // Save state after recording death
+        savePersistentState();
     }
 
     /**
@@ -177,6 +399,11 @@ public final class DailyRewardManager {
      */
     private static void onServerTick(MinecraftServer server) {
         long currentTime = System.currentTimeMillis();
+
+        // Load persistent state if not loaded yet
+        if (persistentState == null) {
+            loadPersistentState(server);
+        }
 
         // Check for 1-hour milestone messages
         checkOneHourMilestones(server);
@@ -197,6 +424,11 @@ public final class DailyRewardManager {
         if (currentTime - lastCleanup > CLEANUP_INTERVAL_MS) {
             cleanupStaleData();
             lastCleanup = currentTime;
+        }
+
+        // Periodic save of data (every 5 minutes)
+        if (currentTime - lastCleanup > 300000L) { // 5 minutes
+            savePersistentState();
         }
     }
 
@@ -336,6 +568,9 @@ public final class DailyRewardManager {
             // Reset all daily data for new day
             resetDailyData();
 
+            // Save state after processing rewards
+            savePersistentState();
+
             LOGGER.info("Daily rewards processing completed");
         } catch (Exception e) {
             LOGGER.error("Error processing daily rewards", e);
@@ -460,7 +695,7 @@ public final class DailyRewardManager {
      */
     public static Map<String, Object> getDebugInfo() {
         Map<String, Object> info = new HashMap<>();
-        info.put("currentDay", currentDay.toString());
+        info.put("current_day", currentDay.toString());
         info.put("trackedPlayers", playerData.size());
 
         // Count teams that have active players (not just teams with deaths)
