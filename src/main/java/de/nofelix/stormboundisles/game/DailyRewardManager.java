@@ -366,12 +366,10 @@ public final class DailyRewardManager {
             if (isActive) {
                 activeMembers++;
 
-                // Check if player survived (active, didn't die, currently alive)
+                // Check if player survived (active and didn't die during the day)
                 boolean died = data.getDiedToday();
-                ServerPlayerEntity player = server.getPlayerManager().getPlayer(memberId);
-                boolean currentlyAlive = player != null && player.isAlive();
 
-                if (!died && currentlyAlive) {
+                if (!died) {
                     survivors++;
                 }
             }
