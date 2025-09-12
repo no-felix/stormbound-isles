@@ -26,6 +26,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 import net.minecraft.util.Formatting;
 import net.minecraft.block.BedBlock;
 import net.minecraft.entity.effect.StatusEffects;
@@ -39,6 +41,32 @@ import net.minecraft.world.GameMode;
 public final class PlayerEventHandler {
 	private static int boundaryCheckCounter = 0;
 	private static final Map<UUID, Long> lastBoundaryWarning = new HashMap<>();
+
+	// Cache for team-island mappings to avoid repeated DataManager lookups
+	private static final Map<UUID, CachedTeamInfo> teamCache = new HashMap<>();
+
+	// Batch processing state
+	private static int currentBatchIndex = 0;
+	private static final int BATCH_SIZE = 5; // Process 5 players per boundary check tick
+
+	/**
+	 * Cached team information to avoid repeated DataManager lookups
+	 */
+	private static class CachedTeamInfo {
+		final String teamName;
+		final String islandId;
+		final long cacheTime;
+
+		CachedTeamInfo(String teamName, String islandId) {
+			this.teamName = teamName;
+			this.islandId = islandId;
+			this.cacheTime = System.currentTimeMillis();
+		}
+
+		boolean isExpired() {
+			return System.currentTimeMillis() - cacheTime > 30000; // 30 second expiry
+		}
+	}
 
 	/**
 	 * Private constructor to prevent instantiation.
@@ -95,122 +123,154 @@ public final class PlayerEventHandler {
 		}
 		boundaryCheckCounter = 0;
 
-		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-			enforceIslandBoundary(player);
+		// Get all online players
+		List<ServerPlayerEntity> allPlayers = new ArrayList<>(server.getPlayerManager().getPlayerList());
+		if (allPlayers.isEmpty()) {
+			return;
 		}
+
+		// Process players in batches to distribute load across ticks
+		int startIndex = currentBatchIndex;
+		int endIndex = Math.min(startIndex + BATCH_SIZE, allPlayers.size());
+
+		for (int i = startIndex; i < endIndex; i++) {
+			enforceIslandBoundary(allPlayers.get(i));
+		}
+
+		// Update batch index for next tick
+		currentBatchIndex = (endIndex >= allPlayers.size()) ? 0 : endIndex;
 	}
 
 	/**
 	 * Warns and teleports a player back if they leave their island during BUILD.
 	 */
 	private static void enforceIslandBoundary(ServerPlayerEntity player) {
-		Optional<Team> team = DataManager.getTeams().values().stream()
-				.filter(t -> t.getMembers().contains(player.getUuid()))
-				.findFirst();
+		UUID playerId = player.getUuid();
 
-		if (team.isEmpty() || team.get().getIslandId() == null)
-			return;
+		// Try to get cached team info first
+		CachedTeamInfo cachedInfo = teamCache.get(playerId);
+		if (cachedInfo == null || cachedInfo.isExpired()) {
+			// Cache miss or expired - lookup from DataManager
+			Optional<Team> team = DataManager.getTeams().values().stream()
+					.filter(t -> t.getMembers().contains(playerId))
+					.findFirst();
 
-		Island island = DataManager.getIsland(team.get().getIslandId());
-		if (island == null || island.getZone() == null)
+			if (team.isEmpty() || team.get().getIslandId() == null) {
+				// No team or no island - remove from cache if present
+				teamCache.remove(playerId);
+				return;
+			}
+
+			// Cache the result
+			cachedInfo = new CachedTeamInfo(team.get().getName(), team.get().getIslandId());
+			teamCache.put(playerId, cachedInfo);
+		}
+
+		// Get island from cached info
+		Island island = DataManager.getIsland(cachedInfo.islandId);
+		if (island == null || island.getZone() == null) {
+			teamCache.remove(playerId); // Remove invalid cache entry
 			return;
+		}
 
 		ServerWorld world = player.getServerWorld();
 
 		// Don't enforce boundaries in other dimensions
 		if (world.getRegistryKey() != World.OVERWORLD) {
-			StormboundIslesMod.LOGGER.debug("Skipping boundary enforcement for player {} in dimension {}",
-					player.getName().getString(), world.getRegistryKey().getValue());
 			return;
 		}
 
 		BlockPos pos = player.getBlockPos();
 		if (!island.getZone().contains(pos)) {
 			long now = System.currentTimeMillis();
-			Long last = lastBoundaryWarning.get(player.getUuid());
+			Long last = lastBoundaryWarning.get(playerId);
 			if (last == null || (now - last) > ConfigManager.getPlayerBoundaryWarningCooldownMs()) {
 				player.sendMessage(Text.literal("§c⚠ You cannot leave your island during the build phase!"), true);
-				lastBoundaryWarning.put(player.getUuid(), now);
-				StormboundIslesMod.LOGGER.debug("Warning sent to player {} for leaving island {}",
-						player.getName().getString(), team.get().getIslandId());
+				lastBoundaryWarning.put(playerId, now);
 			}
 
 			if (island.getSpawnY() >= 0) {
+				teleportPlayerToIslandSpawn(player, world, island, cachedInfo.islandId);
+			}
+		}
+	}
 
-				double px = player.getX();
-				double pz = player.getZ();
-				double sx = island.getSpawnX() + 0.5;
-				double sz = island.getSpawnZ() + 0.5;
-				double dx = px - sx;
-				double dz = pz - sz;
-				double len = Math.sqrt(dx * dx + dz * dz);
+	/**
+	 * Teleports a player back to their island spawn location.
+	 */
+	private static void teleportPlayerToIslandSpawn(ServerPlayerEntity player, ServerWorld world, Island island,
+			String islandId) {
+		double px = player.getX();
+		double pz = player.getZ();
+		double sx = island.getSpawnX() + 0.5;
+		double sz = island.getSpawnZ() + 0.5;
+		double dx = px - sx;
+		double dz = pz - sz;
+		double len = Math.sqrt(dx * dx + dz * dz);
 
-				final double pushStep = ConfigManager.getPlayerBoundaryPushStep();
-				final int maxSteps = ConfigManager.getPlayerBoundaryPushMaxSteps();
-				boolean moved = false;
+		final double pushStep = ConfigManager.getPlayerBoundaryPushStep();
+		final int maxSteps = ConfigManager.getPlayerBoundaryPushMaxSteps();
+		boolean moved = false;
 
-				if (len <= 0.0001) {
-					double py = player.getY();
-					player.teleport(world, sx, py, sz, player.getYaw(), player.getPitch());
-					moved = true;
-				} else {
-					for (int i = 1; i <= maxSteps; i++) {
-						double newLen = Math.max(0.0, len - pushStep * i);
-						double nx = sx + (dx / len) * newLen;
-						double nz = sz + (dz / len) * newLen;
+		if (len <= 0.0001) {
+			double py = player.getY();
+			player.teleport(world, sx, py, sz, player.getYaw(), player.getPitch());
+			moved = true;
+		} else {
+			for (int i = 1; i <= maxSteps; i++) {
+				double newLen = Math.max(0.0, len - pushStep * i);
+				double nx = sx + (dx / len) * newLen;
+				double nz = sz + (dz / len) * newLen;
 
-						int cx = (int) Math.floor(nx);
-						int cz = (int) Math.floor(nz);
-						int cy = (int) Math.floor(player.getY());
+				int cx = (int) Math.floor(nx);
+				int cz = (int) Math.floor(nz);
+				int cy = (int) Math.floor(player.getY());
 
-						BlockPos candidate = new BlockPos(cx, cy, cz);
-						if (island.getZone().contains(candidate)) {
-							// Try small vertical adjustments before rejecting candidate
-							double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
-							boolean teleported = false;
-							for (double off : offsets) {
-								double tryY = player.getY() + off;
-								if (isSafeTeleport(world, nx, tryY, nz)) {
-									player.teleport(world, nx, tryY, nz, player.getYaw(), player.getPitch());
-									StormboundIslesMod.LOGGER.debug("Pushed player {} back to {} (island {})",
-											player.getName().getString(), new BlockPos(cx, (int) Math.floor(tryY), cz),
-											team.get().getIslandId());
-									moved = true;
-									teleported = true;
-									break;
-								}
-							}
-							if (teleported)
-								break;
-						}
-					}
-				}
-
-				if (!moved) {
-					// Try fallback spawn teleport if it's safe
-					// Try small vertical adjustments around spawn
+				BlockPos candidate = new BlockPos(cx, cy, cz);
+				if (island.getZone().contains(candidate)) {
+					// Try small vertical adjustments before rejecting candidate
 					double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
 					boolean teleported = false;
 					for (double off : offsets) {
-						double tryY = island.getSpawnY() + off;
-						if (isSafeTeleport(world, sx, tryY, sz)) {
-							player.teleport(world, sx, tryY, sz, player.getYaw(), player.getPitch());
-							StormboundIslesMod.LOGGER.debug(
-									"Fallback teleport of player {} to spawn of island {} at {}",
-									player.getName().getString(), team.get().getIslandId(),
-									new BlockPos((int) sx, (int) Math.floor(tryY), (int) sz));
+						double tryY = player.getY() + off;
+						if (isSafeTeleport(world, nx, tryY, nz)) {
+							player.teleport(world, nx, tryY, nz, player.getYaw(), player.getPitch());
+							StormboundIslesMod.LOGGER.debug("Pushed player {} back to {} (island {})",
+									player.getName().getString(), new BlockPos(cx, (int) Math.floor(tryY), cz),
+									islandId);
+							moved = true;
 							teleported = true;
 							break;
 						}
 					}
-					if (!teleported) {
-						StormboundIslesMod.LOGGER.warn(
-								"Could not safely teleport player {} to spawn of island {} (unsafe blocks at destination)",
-								player.getName().getString(), team.get().getIslandId());
-						player.sendMessage(Text.literal(
-								"§cCould not safely teleport you back to your island. Please contact an admin."), true);
-					}
+					if (teleported)
+						break;
 				}
+			}
+		}
+
+		if (!moved) {
+			// Try fallback spawn teleport if it's safe
+			// Try small vertical adjustments around spawn
+			double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
+			boolean teleported = false;
+			for (double off : offsets) {
+				double tryY = island.getSpawnY() + off;
+				if (isSafeTeleport(world, sx, tryY, sz)) {
+					player.teleport(world, sx, tryY, sz, player.getYaw(), player.getPitch());
+					StormboundIslesMod.LOGGER.debug(
+							"Fallback teleport of player {} to spawn of island {}",
+							player.getName().getString(), islandId);
+					teleported = true;
+					break;
+				}
+			}
+			if (!teleported) {
+				StormboundIslesMod.LOGGER.warn(
+						"Could not safely teleport player {} to spawn of island {} (unsafe blocks at destination)",
+						player.getName().getString(), islandId);
+				player.sendMessage(Text.literal(
+						"§cCould not safely teleport you back to your island. Please contact an admin."), true);
 			}
 		}
 	}
