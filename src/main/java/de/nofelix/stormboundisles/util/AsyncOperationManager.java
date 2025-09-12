@@ -40,7 +40,7 @@ public final class AsyncOperationManager {
     private static final AtomicInteger failedOperations = new AtomicInteger(0);
 
     // Configuration
-    private static final int DEFAULT_THREAD_POOL_SIZE = 2;
+    private static final int DEFAULT_THREAD_POOL_SIZE = 4;
     private static final long MAIN_THREAD_CALLBACK_TIMEOUT_MS = 5000; // 5 seconds
 
     private AsyncOperationManager() {
@@ -175,9 +175,9 @@ public final class AsyncOperationManager {
         int processed = 0;
         long startTime = System.currentTimeMillis();
 
-        // Process up to 5 tasks per tick to prevent main thread blocking
+        // Process up to 10 tasks per tick to prevent main thread blocking
         MainThreadTask task;
-        while (processed < 5 && (task = mainThreadQueue.poll()) != null) {
+        while (processed < 10 && (task = mainThreadQueue.poll()) != null) {
             try {
                 task.runnable.run();
                 processed++;

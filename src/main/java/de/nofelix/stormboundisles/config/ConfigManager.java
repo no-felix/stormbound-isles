@@ -40,7 +40,7 @@ public final class ConfigManager {
         static final int BUILD_PHASE_TICKS = 20 * 60 * 60 * 24 * 7; // 1 week
         static final int PVP_PHASE_TICKS = 20 * 60 * 60 * 24 * 7; // 1 week
         static final int COUNTDOWN_DURATION_TICKS = 20 * 10; // 10 seconds
-        static final int BOUNDARY_CHECK_INTERVAL = 10;
+        static final int BOUNDARY_CHECK_INTERVAL = 20;
         static final double BOUNDARY_PUSH_STEP = 1.0;
         static final int BOUNDARY_PUSH_MAX_STEPS = 10;
         static final int DEATH_PENALTY = 5;
@@ -605,7 +605,7 @@ public final class ConfigManager {
         static class Player {
             /**
              * Interval in ticks for checking if players are outside their island
-             * boundaries. Default: 10 ticks.
+             * boundaries. Default: 20 ticks.
              */
             int boundaryCheckInterval = Defaults.BOUNDARY_CHECK_INTERVAL;
             /** Points deducted from a team when a member dies. Default: 10 points. */
