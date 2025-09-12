@@ -693,17 +693,28 @@ public final class DailyRewardManager {
     /**
      * Gets debug information about current daily tracking state.
      */
-    public static Map<String, Object> getDebugInfo() {
+    public static Map<String, Object> getDebugInfo(MinecraftServer server) {
         Map<String, Object> info = new HashMap<>();
-        info.put("current_day", currentDay.toString());
+        info.put("current_day", currentDay != null ? currentDay.toString() : "null");
         info.put("trackedPlayers", playerData.size());
 
-        // Count teams that have active players (not just teams with deaths)
+        Set<String> teamsWithActivePlayers = getTeamsWithActivePlayers();
+        info.put("trackedTeams", teamsWithActivePlayers.size());
+        info.put("teamsWithDeaths", teamDeathCount.size());
+
+        Map<String, Object> stats = getPlayerStats();
+        info.putAll(stats);
+
+        List<Map<String, Object>> playerDetails = getPlayerDetails(server);
+        info.put("playerDetails", playerDetails);
+
+        return info;
+    }
+
+    private static Set<String> getTeamsWithActivePlayers() {
         Set<String> teamsWithActivePlayers = new HashSet<>();
         for (Map.Entry<UUID, PlayerDailyData> entry : playerData.entrySet()) {
             UUID playerId = entry.getKey();
-
-            // Find which team this player belongs to
             for (Team team : DataManager.getTeams().values()) {
                 if (team.getMembers().contains(playerId)) {
                     teamsWithActivePlayers.add(team.getName());
@@ -711,10 +722,11 @@ public final class DailyRewardManager {
                 }
             }
         }
-        info.put("trackedTeams", teamsWithActivePlayers.size());
-        info.put("teamsWithDeaths", teamDeathCount.size());
+        return teamsWithActivePlayers;
+    }
 
-        // Active players count and detailed info
+    private static Map<String, Object> getPlayerStats() {
+        Map<String, Object> stats = new HashMap<>();
         long activeCount = 0;
         long onlineCount = 0;
         long totalOnlineTimeHours = 0;
@@ -725,14 +737,63 @@ public final class DailyRewardManager {
                 onlineCount++;
             if (data.isActive())
                 activeCount++;
-            totalOnlineTimeHours += data.getTotalOnlineTimeMs() / (1000 * 60 * 60); // Convert to hours
+            totalOnlineTimeHours += data.getTotalOnlineTimeMs() / (1000 * 60 * 60);
         }
 
-        info.put("activePlayers", activeCount);
-        info.put("onlinePlayers", onlineCount);
-        info.put("totalOnlineTimeHours", totalOnlineTimeHours);
-        info.put("activityThresholdSeconds", activityThresholdSeconds);
+        stats.put("activePlayers", activeCount);
+        stats.put("onlinePlayers", onlineCount);
+        stats.put("totalOnlineTimeHours", totalOnlineTimeHours);
+        stats.put("activityThresholdSeconds", activityThresholdSeconds);
+        return stats;
+    }
 
-        return info;
+    private static List<Map<String, Object>> getPlayerDetails(MinecraftServer server) {
+        List<Map<String, Object>> playerDetails = new ArrayList<>();
+        for (Map.Entry<UUID, PlayerDailyData> entry : playerData.entrySet()) {
+            UUID playerId = entry.getKey();
+            PlayerDailyData data = entry.getValue();
+
+            Map<String, Object> playerInfo = new HashMap<>();
+            playerInfo.put(NBT_PLAYER_ID, playerId.toString());
+            playerInfo.put("name", getPlayerName(server, playerId));
+            playerInfo.put("team", findPlayerTeam(playerId));
+            addSessionInfo(playerInfo, data);
+            playerDetails.add(playerInfo);
+        }
+
+        // Sort by total time (descending)
+        playerDetails.sort((a, b) -> Long.compare(
+                (Long) b.get(NBT_TOTAL_ONLINE_TIME_MS),
+                (Long) a.get(NBT_TOTAL_ONLINE_TIME_MS)));
+
+        return playerDetails;
+    }
+
+    private static String getPlayerName(MinecraftServer server, UUID playerId) {
+        var player = server.getPlayerManager().getPlayer(playerId);
+        return player != null ? player.getName().getString() : "Unknown";
+    }
+
+    private static void addSessionInfo(Map<String, Object> playerInfo, PlayerDailyData data) {
+        long totalTimeMs = data.getTotalOnlineTimeMs();
+        long totalTimeMinutes = totalTimeMs / (1000 * 60);
+        long totalTimeHours = totalTimeMs / (1000 * 60 * 60);
+
+        playerInfo.put(NBT_IS_ONLINE, data.isOnline);
+        playerInfo.put(NBT_TOTAL_ONLINE_TIME_MS, totalTimeMs);
+        playerInfo.put("totalTimeFormatted", String.format("%dh %dm", totalTimeHours, totalTimeMinutes % 60));
+        playerInfo.put(NBT_DIED_TODAY, data.getDiedToday());
+        playerInfo.put("isActive", data.isActive());
+        playerInfo.put(NBT_ONE_HOUR_MESSAGE_SENT, data.oneHourMessageSent);
+
+        if (data.isOnline) {
+            long currentSessionMs = System.currentTimeMillis() - data.sessionStartTime;
+            long currentSessionMinutes = currentSessionMs / (1000 * 60);
+            playerInfo.put("currentSessionMinutes", currentSessionMinutes);
+            playerInfo.put(NBT_SESSION_START_TIME, new java.util.Date(data.sessionStartTime).toString());
+        } else {
+            playerInfo.put("currentSessionMinutes", 0);
+            playerInfo.put(NBT_SESSION_START_TIME, "N/A");
+        }
     }
 }
