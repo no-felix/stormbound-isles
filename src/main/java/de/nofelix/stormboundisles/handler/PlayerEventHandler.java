@@ -9,6 +9,7 @@ import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.GamePhase;
 import de.nofelix.stormboundisles.game.ScoreboardManager;
 import de.nofelix.stormboundisles.init.Initialize;
+import de.nofelix.stormboundisles.util.ZoneChecker;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -180,8 +181,7 @@ public final class PlayerEventHandler {
 			return;
 		}
 
-		BlockPos pos = player.getBlockPos();
-		if (!island.getZone().contains(pos)) {
+		if (!ZoneChecker.isPlayerInZone(cachedInfo.islandId, island.getZone(), player)) {
 			long now = System.currentTimeMillis();
 			Long last = lastBoundaryWarning.get(playerId);
 			if (last == null || (now - last) > ConfigManager.getPlayerBoundaryWarningCooldownMs()) {
@@ -227,7 +227,7 @@ public final class PlayerEventHandler {
 				int cy = (int) Math.floor(player.getY());
 
 				BlockPos candidate = new BlockPos(cx, cy, cz);
-				if (island.getZone().contains(candidate)) {
+				if (ZoneChecker.isPositionInZone(island.getZone(), candidate)) {
 					// Try small vertical adjustments before rejecting candidate
 					double[] offsets = { 0.0, 1.0, -1.0, 2.0, -2.0 };
 					boolean teleported = false;
