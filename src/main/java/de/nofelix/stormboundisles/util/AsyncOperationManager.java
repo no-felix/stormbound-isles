@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.Objects;
 
@@ -39,9 +40,17 @@ public final class AsyncOperationManager {
     private static final AtomicInteger completedOperations = new AtomicInteger(0);
     private static final AtomicInteger failedOperations = new AtomicInteger(0);
 
+    // Performance monitoring
+    private static final AtomicLong totalAsyncTime = new AtomicLong(0);
+    private static final AtomicLong totalCallbackTime = new AtomicLong(0);
+    private static final AtomicInteger queueFullCount = new AtomicInteger(0);
+
     // Configuration
     private static final int DEFAULT_THREAD_POOL_SIZE = 4;
     private static final long MAIN_THREAD_CALLBACK_TIMEOUT_MS = 5000; // 5 seconds
+    private static final int MAX_CALLBACKS_PER_TICK = 20;
+    private static final int MAX_CONCURRENT_OPERATIONS = 12;
+    private static final Semaphore operationSemaphore = new Semaphore(MAX_CONCURRENT_OPERATIONS);
 
     private AsyncOperationManager() {
         throw new UnsupportedOperationException("Utility class");
@@ -86,11 +95,28 @@ public final class AsyncOperationManager {
             throw new IllegalStateException("AsyncOperationManager not initialized");
         }
 
+        // Rate limiting - check if we can acquire a permit
+        if (!operationSemaphore.tryAcquire()) {
+            LOGGER.warn("Async operation queue full, rejecting operation");
+            queueFullCount.incrementAndGet();
+            throw new IllegalStateException("Async operation queue full");
+        }
+
         activeOperations.incrementAndGet();
+        long startTime = System.nanoTime();
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return operation.call();
+                T result = operation.call();
+                long asyncTime = (System.nanoTime() - startTime) / 1_000_000; // Convert to milliseconds
+                totalAsyncTime.addAndGet(asyncTime);
+
+                // Log warning for slow operations
+                if (asyncTime > 1000) { // 1 second
+                    LOGGER.warn("Slow async operation completed in {}ms", asyncTime);
+                }
+
+                return result;
             } catch (Exception e) {
                 LOGGER.error("Async operation failed", e);
                 failedOperations.incrementAndGet();
@@ -104,6 +130,7 @@ public final class AsyncOperationManager {
                 throw new CompletionException("Async operation failed", e);
             } finally {
                 activeOperations.decrementAndGet();
+                operationSemaphore.release(); // Release the permit
             }
         }, asyncExecutor).whenComplete((result, throwable) -> {
             completedOperations.incrementAndGet();
@@ -173,27 +200,39 @@ public final class AsyncOperationManager {
      */
     private static void processMainThreadCallbacks(MinecraftServer server) {
         int processed = 0;
-        long startTime = System.currentTimeMillis();
+        long startTime = System.nanoTime();
 
-        // Process up to 10 tasks per tick to prevent main thread blocking
+        // Process up to MAX_CALLBACKS_PER_TICK tasks per tick to prevent main thread
+        // blocking
         MainThreadTask task;
-        while (processed < 10 && (task = mainThreadQueue.poll()) != null) {
+        while (processed < MAX_CALLBACKS_PER_TICK && (task = mainThreadQueue.poll()) != null) {
+            long callbackStartTime = System.nanoTime();
             try {
                 task.runnable.run();
                 processed++;
+
+                long callbackTime = (System.nanoTime() - callbackStartTime) / 1_000_000; // Convert to milliseconds
+                totalCallbackTime.addAndGet(callbackTime);
+
+                // Log warning for slow callbacks
+                if (callbackTime > 50) { // 50ms
+                    LOGGER.warn("Slow main thread callback completed in {}ms", callbackTime);
+                }
             } catch (Exception e) {
                 LOGGER.error("Main thread callback failed", e);
             }
 
             // Safety timeout to prevent infinite loops
-            if (System.currentTimeMillis() - startTime > MAIN_THREAD_CALLBACK_TIMEOUT_MS) {
+            long totalTime = (System.nanoTime() - startTime) / 1_000_000;
+            if (totalTime > MAIN_THREAD_CALLBACK_TIMEOUT_MS) {
                 LOGGER.warn("Main thread callback processing timed out after {} ms", MAIN_THREAD_CALLBACK_TIMEOUT_MS);
                 break;
             }
         }
 
         if (processed > 0) {
-            LOGGER.debug("Processed {} main thread callbacks", processed);
+            long totalTime = (System.nanoTime() - startTime) / 1_000_000;
+            LOGGER.debug("Processed {} main thread callbacks in {}ms", processed, totalTime);
         }
     }
 
@@ -235,6 +274,22 @@ public final class AsyncOperationManager {
         stats.put("failedOperations", failedOperations.get());
         stats.put("queuedMainThreadTasks", mainThreadQueue.size());
         stats.put("threadPoolActive", asyncExecutor != null && !asyncExecutor.isShutdown());
+        stats.put("totalAsyncTimeMs", totalAsyncTime.get());
+        stats.put("totalCallbackTimeMs", totalCallbackTime.get());
+        stats.put("queueFullCount", queueFullCount.get());
+        stats.put("availablePermits", operationSemaphore.availablePermits());
+        stats.put("maxConcurrentOperations", MAX_CONCURRENT_OPERATIONS);
+        stats.put("maxCallbacksPerTick", MAX_CALLBACKS_PER_TICK);
+
+        // Calculate averages if we have data
+        long totalOps = (long) completedOperations.get() + failedOperations.get();
+        if (totalOps > 0) {
+            stats.put("averageAsyncTimeMs", totalAsyncTime.get() / totalOps);
+        }
+        if (completedOperations.get() > 0) {
+            stats.put("averageCallbackTimeMs", totalCallbackTime.get() / completedOperations.get());
+        }
+
         return stats;
     }
 
