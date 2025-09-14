@@ -31,7 +31,10 @@ import java.util.Objects;
  * Zone territory = new Zone(vertices);
  * 
  * // Check if player is in territory (Y-coordinate ignored)
- * boolean inTerritory = zone.contains(playerPos);
+ * boolean inTerritory = ZoneChecker.isPlayerInZone(islandId, zone, player);
+ *
+ * // Or for arbitrary positions:
+ * boolean inTerritory = ZoneChecker.isPositionInZone(zone, playerPos);
  * ```
  */
 public final class Zone {
@@ -147,10 +150,14 @@ public final class Zone {
 
     /**
      * Checks if the given position is contained within this territorial zone.
-     * 
-     * This method only checks horizontal containment (X and Z coordinates).
+     *
+     * <p><strong>Performance Note:</strong> For performance-critical code that checks
+     * player positions frequently, consider using {@link de.nofelix.stormboundisles.util.ZoneChecker}
+     * which provides spatial caching and automatic optimization.</p>
+     *
+     * <p>This method only checks horizontal containment (X and Z coordinates).
      * The Y coordinate is completely ignored, meaning the zone extends
-     * infinitely upward and downward, representing island territory boundaries.
+     * infinitely upward and downward, representing island territory boundaries.</p>
      *
      * @param pos The position to check
      * @return true if the position is inside the territory, false otherwise

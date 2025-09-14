@@ -53,7 +53,7 @@ public final class ConfigManager {
         static final int MAX_POINTS_PER_DAY = 500;
         static final long BOUNDARY_WARNING_COOLDOWN_MS = 3000L;
         static final long RESET_CONFIRMATION_TIMEOUT_MS = 10000L;
-        static final int BUFF_UPDATE_INTERVAL = 60;
+        static final int BUFF_UPDATE_INTERVAL = 120;
         static final int BUFF_DURATION_TICKS = 20 * 60; // 1 minute
         static final int SCOREBOARD_UPDATE_INTERVAL = 20; // 1 second
         static final int DISASTER_INTERVAL_TICKS = 20 * 60 * 5; // 5 minutes
