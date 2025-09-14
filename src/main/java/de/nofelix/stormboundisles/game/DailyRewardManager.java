@@ -663,12 +663,12 @@ public final class DailyRewardManager {
         // Reset player data but preserve active sessions
         playerData.values().forEach(PlayerDailyData::resetForNewDay);
 
-        // Reset team counters
-        teamDeathCount.values().forEach(counter -> counter.set(0));
-        appliedPointsToday.values().forEach(counter -> counter.set(0));
+        // Clear team death tracking for fresh daily start
+        teamDeathCount.clear();
+        appliedPointsToday.clear();
 
-        LOGGER.debug("Reset daily data for {} players and {} teams",
-                playerData.size(), teamDeathCount.size());
+        LOGGER.debug("Reset daily data for {} players (team death tracking cleared)",
+                playerData.size());
     }
 
     /**
