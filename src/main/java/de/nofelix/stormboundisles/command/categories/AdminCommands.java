@@ -10,6 +10,7 @@ import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.game.GameManager;
 import de.nofelix.stormboundisles.game.DailyRewardManager;
 import de.nofelix.stormboundisles.game.GamePhase;
+import de.nofelix.stormboundisles.util.AsyncOperationManager;
 import de.nofelix.stormboundisles.util.Constants;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.server.command.CommandManager;
@@ -131,6 +132,31 @@ public class AdminCommands implements CommandCategory {
                                                                         false);
 
                                                         for (Map.Entry<String, Object> entry : debugInfo.entrySet()) {
+                                                                ctx.getSource().sendFeedback(
+                                                                                () -> Text.literal(String.format(
+                                                                                                "  %s: %s",
+                                                                                                entry.getKey(),
+                                                                                                entry.getValue()))
+                                                                                                .formatted(Formatting.WHITE),
+                                                                                false);
+                                                        }
+
+                                                        return 1;
+                                                })));
+
+                // Admin async operation stats command
+                adminCommand.then(CommandManager.literal("debug")
+                                .then(CommandManager.literal("async")
+                                                .executes(ctx -> {
+                                                        Map<String, Object> stats = AsyncOperationManager.getStats();
+
+                                                        ctx.getSource().sendFeedback(
+                                                                        () -> Text.literal(
+                                                                                        "=== Async Operation Manager Stats ===")
+                                                                                        .formatted(Formatting.GOLD),
+                                                                        false);
+
+                                                        for (Map.Entry<String, Object> entry : stats.entrySet()) {
                                                                 ctx.getSource().sendFeedback(
                                                                                 () -> Text.literal(String.format(
                                                                                                 "  %s: %s",
