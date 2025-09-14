@@ -6,9 +6,9 @@ import de.nofelix.stormboundisles.command.CommandCategory;
 import de.nofelix.stormboundisles.command.util.CommandPermissions;
 import de.nofelix.stormboundisles.command.util.CommandSuggestions;
 import de.nofelix.stormboundisles.data.DataManager;
-import de.nofelix.stormboundisles.data.Island;
 import de.nofelix.stormboundisles.data.Team;
 import de.nofelix.stormboundisles.util.Constants;
+import de.nofelix.stormboundisles.util.ZoneChecker;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -108,12 +108,9 @@ public class PlayerCommands implements CommandCategory {
                 .append(Constants.RESET).append("\n");
 
         // Check what island they're in
-        String currentIsland = Constants.NO_ISLAND;
-        for (Island island : DataManager.getIslands().values()) {
-            if (island.getZone() != null && island.getZone().contains(player.getBlockPos())) {
-                currentIsland = island.getId();
-                break;
-            }
+        String currentIsland = ZoneChecker.findPlayerIsland(player, DataManager.getIslands());
+        if (currentIsland == null) {
+            currentIsland = Constants.NO_ISLAND;
         }
         sb.append(Constants.ISLAND_PREFIX).append(currentIsland).append(Constants.RESET);
 
