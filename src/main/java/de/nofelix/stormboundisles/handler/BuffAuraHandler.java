@@ -2,6 +2,7 @@ package de.nofelix.stormboundisles.handler;
 
 import de.nofelix.stormboundisles.StormboundIslesMod;
 import de.nofelix.stormboundisles.util.AsyncOperationManager;
+import de.nofelix.stormboundisles.util.ZoneChecker;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
@@ -14,9 +15,10 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Applies island‑specific buffs to players within their island zones at
@@ -64,6 +66,9 @@ public class BuffAuraHandler {
 		}
 
 		processBuffsForOccupiedIslands(server, onlinePlayers);
+
+		// Periodic ZoneChecker cache cleanup to prevent memory leaks
+		ZoneChecker.cleanupCache(onlinePlayers);
 	}
 
 	/**
@@ -78,8 +83,24 @@ public class BuffAuraHandler {
 			lastLogTime = currentTime;
 		}
 
-		for (Island island : DataManager.getIslands().values()) {
-			if (island.getZone() != null) {
+		// First pass: collect islands that have players (avoids duplicate zone checks)
+		Set<String> occupiedIslandIds = new HashSet<>();
+		for (ServerPlayerEntity player : onlinePlayers) {
+			String islandId = ZoneChecker.findPlayerIsland(player, DataManager.getIslands());
+			if (islandId != null) {
+				occupiedIslandIds.add(islandId);
+			}
+		}
+
+		// Second pass: process only occupied islands
+		if (shouldLog) {
+			StormboundIslesMod.LOGGER.debug("Processing buffs for {} occupied islands (skipped {})",
+				occupiedIslandIds.size(), DataManager.getIslands().size() - occupiedIslandIds.size());
+		}
+
+		for (String islandId : occupiedIslandIds) {
+			Island island = DataManager.getIsland(islandId);
+			if (island != null && island.getZone() != null) {
 				processBuffsForSingleIsland(island, onlinePlayers, shouldLog);
 			}
 		}
@@ -93,16 +114,8 @@ public class BuffAuraHandler {
 			boolean shouldLog) {
 		// Use async operation for expensive zone containment checks
 		AsyncOperationManager.submitAsync(
-				() -> {
-					// Perform expensive raycasting checks in background thread
-					List<ServerPlayerEntity> playersOnIsland = new ArrayList<>();
-					for (ServerPlayerEntity player : onlinePlayers) {
-						if (island.getZone().contains(player.getBlockPos())) {
-							playersOnIsland.add(player);
-						}
-					}
-					return playersOnIsland;
-				},
+				() -> ZoneChecker.getPlayersInZone(
+					island.getId(), island.getZone(), onlinePlayers),
 				playersOnIsland -> {
 					// This callback runs on main thread - safe to apply buffs
 					if (playersOnIsland.isEmpty()) {
