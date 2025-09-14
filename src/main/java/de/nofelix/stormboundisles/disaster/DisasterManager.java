@@ -2,6 +2,7 @@ package de.nofelix.stormboundisles.disaster;
 
 import de.nofelix.stormboundisles.StormboundIslesMod;
 import de.nofelix.stormboundisles.util.AsyncOperationManager;
+import de.nofelix.stormboundisles.util.ZoneChecker;
 import de.nofelix.stormboundisles.config.ConfigManager;
 import de.nofelix.stormboundisles.data.DataManager;
 import de.nofelix.stormboundisles.data.Island;
@@ -315,13 +316,9 @@ public final class DisasterManager {
         // Use async operation for expensive zone containment checks
         AsyncOperationManager.submitAsync(
                 () -> {
-                    // Perform expensive raycasting checks in background thread
-                    List<ServerPlayerEntity> playersInZone = new ArrayList<>();
-                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                        if (island.getZone().contains(player.getBlockPos())) {
-                            playersInZone.add(player);
-                        }
-                    }
+                    // Use ZoneChecker for optimized zone containment with spatial caching
+                    List<ServerPlayerEntity> playersInZone = ZoneChecker.getPlayersInZone(
+                            island.getId(), island.getZone(), server.getPlayerManager().getPlayerList());
                     return new DisasterApplicationData(playersInZone, type, applyEffects, sendActionbar);
                 },
                 data -> {
@@ -368,7 +365,7 @@ public final class DisasterManager {
         }
 
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (island.getZone().contains(player.getBlockPos())) {
+            if (ZoneChecker.isPlayerInZone(island.getId(), island.getZone(), player)) {
                 ActionbarNotifier.send(player, "§aDisaster on " + islandId + " has subsided!");
             }
         }
